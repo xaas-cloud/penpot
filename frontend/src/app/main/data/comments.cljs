@@ -15,6 +15,7 @@
    [app.main.data.event :as ev]
    [app.main.data.helpers :as dsh]
    [app.main.data.team :as dtm]
+   [app.main.refs :as refs]
    [app.main.repo :as rp]
    [beicon.v2.core :as rx]
    [potok.v2.core :as ptk]))
@@ -449,6 +450,20 @@
                       (rx/reduce #(merge %1 (d/index-by :id %2)) {})
                       (rx/map #(partial fetched-users %))))))
              (rx/catch #(rx/throw {:type :comment-error})))))))
+
+(defn mark-all-threads-as-read
+  "Mark all threads as read"
+  [team-id on-success]
+  (ptk/reify ::mark-all-threads-as-read
+    ptk/WatchEvent
+    (watch [_ _ _]
+      (let [threads (vals @refs/comment-threads)]
+        (->> (rp/cmd! :mark-all-threads-as-read {:threads (mapv :id threads)})
+             (rx/map #(retrieve-unread-comment-threads team-id))
+             (rx/tap on-success)
+             (rx/catch #(rx/throw {:type :comment-error})))))))
+
+
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
