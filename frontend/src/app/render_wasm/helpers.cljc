@@ -12,5 +12,6 @@
   [module name & params]
   (let [fn-sym (with-meta (gensym "fn-") {:tag 'function})]
     `(let [~fn-sym (cljs.core/unchecked-get ~module ~name)]
+       (js/console.log "call" ~module ~name ~@params)
        (~fn-sym ~@params))))
 

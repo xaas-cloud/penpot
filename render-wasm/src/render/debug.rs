@@ -22,7 +22,7 @@ fn render_debug_view(render_state: &mut RenderState) {
         .draw_rect(scaled_rect, &paint);
 }
 
-pub fn render_debug_element(render_state: &mut RenderState, element: &Shape, intersected: bool) {
+pub fn render_debug_shape(render_state: &mut RenderState, element: &Shape, intersected: bool) {
     let mut paint = skia::Paint::default();
     paint.set_style(skia::PaintStyle::Stroke);
     paint.set_color(if intersected {

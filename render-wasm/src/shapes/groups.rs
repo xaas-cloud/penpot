@@ -1,6 +1,6 @@
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Group {
-    masked: bool
+    pub masked: bool
 }
 
 impl Group {

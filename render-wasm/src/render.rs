@@ -1,5 +1,5 @@
 use skia::Contains;
-use skia_safe as skia;
+use skia_safe::{self as skia, Color};
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -31,6 +31,7 @@ pub(crate) struct RenderState {
     // by SVG: https://www.w3.org/TR/SVG2/render.html
     pub final_surface: skia::Surface,
     pub drawing_surface: skia::Surface,
+    pub mask_surface: skia::Surface,
     pub debug_surface: skia::Surface,
     pub font_provider: skia::textlayout::TypefaceFontProvider,
     pub cached_surface_image: Option<CachedSurfaceImage>,
@@ -50,7 +51,9 @@ impl RenderState {
         let debug_surface = final_surface
             .new_surface_with_dimensions((width, height))
             .unwrap();
-
+        let mask_surface = final_surface
+            .new_surface_with_dimensions((width, height))
+            .unwrap();
         let mut font_provider = skia::textlayout::TypefaceFontProvider::new();
         let default_font = skia::FontMgr::default()
             .new_from_data(include_bytes!("fonts/RobotoMono-Regular.ttf"), None)
@@ -61,6 +64,7 @@ impl RenderState {
             gpu_state,
             final_surface,
             drawing_surface,
+            mask_surface,
             debug_surface,
             cached_surface_image: None,
             font_provider,
@@ -184,6 +188,11 @@ impl RenderState {
                     }
                 }
             }
+            Kind::Group(group) => {
+                if group.masked {
+                    println!("Masked Group");
+                }
+            }
             _ => {
                 for fill in shape.fills().rev() {
                     fills::render(self, shape, fill);
@@ -298,40 +307,53 @@ impl RenderState {
         debug::render(self);
     }
 
+    // TODO: Mañana tengo que ver de qué forma puedo setear
+    // el "target" surface sobre esta función porque realmente
+    // vamos a necesitar un stacking context (quizá con save_layer
+    // sirva).
+
     // Returns a boolean indicating if the viewbox contains the rendered shapes
     fn render_shape_tree(&mut self, root_id: &Uuid, tree: &HashMap<Uuid, Shape>) -> bool {
-        if let Some(element) = tree.get(&root_id) {
-            let mut is_complete = self.viewbox.area.contains(element.bounds());
+        if let Some(shape) = tree.get(&root_id) {
+            let mut is_complete = self.viewbox.area.contains(shape.bounds());
 
             if !root_id.is_nil() {
-                if !element.bounds().intersects(self.viewbox.area) || element.hidden() {
-                    debug::render_debug_element(self, element, false);
+                if !shape.bounds().intersects(self.viewbox.area) || shape.hidden() {
+                    debug::render_debug_shape(self, shape, false);
                     // TODO: This means that not all the shapes are rendered so we
                     // need to call a render_all on the zoom out.
                     return is_complete; // TODO return is_complete or return false??
                 } else {
-                    debug::render_debug_element(self, element, true);
+                    debug::render_debug_shape(self, shape, true);
                 }
             }
 
             let mut paint = skia::Paint::default();
-            paint.set_blend_mode(element.blend_mode().into());
-            paint.set_alpha_f(element.opacity());
-            let filter = element.image_filter(self.viewbox.zoom * self.options.dpr());
+            paint.set_blend_mode(shape.blend_mode().into());
+            paint.set_alpha_f(shape.opacity());
+            let filter = shape.image_filter(self.viewbox.zoom * self.options.dpr());
             if let Some(image_filter) = filter {
                 paint.set_image_filter(image_filter);
             }
 
             let layer_rec = skia::canvas::SaveLayerRec::default().paint(&paint);
+            let mask_rec = skia::canvas::SaveLayerRec::default().paint(&paint);
             // This is needed so the next non-children shape does not carry this shape's transform
             self.final_surface.canvas().save_layer(&layer_rec);
-            self.drawing_surface.canvas().save();
+            match shape.kind {
+                Kind::Group(group) => {
+                    self.drawing_surface.canvas().save_layer(&mask_rec);
+                }
+                _ => {
+                    self.drawing_surface.canvas().save();
+                }
+            }
 
             if !root_id.is_nil() {
-                self.render_shape(&mut element.clone());
-                if element.clip() {
+                self.render_shape(&mut shape.clone());
+                if shape.clip() {
                     self.drawing_surface.canvas().clip_rect(
-                        element.bounds(),
+                        shape.bounds(),
                         skia::ClipOp::Intersect,
                         true,
                     );
@@ -339,12 +361,30 @@ impl RenderState {
             }
 
             // draw all the children shapes
-            if element.is_recursive() {
-                for id in element.children_ids() {
+            if shape.is_recursive() {
+                // children_ids already returns only the
+                // needed ids for masked groups.
+                for id in shape.children_ids() {
                     is_complete = self.render_shape_tree(&id, tree) && is_complete;
+                }
+                match shape.kind {
+                    Kind::Group(group) => {
+                        self.mask_surface.canvas().clear(Color::TRANSPARENT);
+
+                        // TODO: Esto no va a funcionar ahora mismo
+                        // pero creo que haciendo algo como esto
+                        // y diciendo que el "target surface" es el
+                        // mask surface valdría. Al menos para un nivel
+                        // de anidación de máscaras. Para más niveles
+                        // haría falta un sistema de stacking contexts.
+                        self.render_shape_tree(&shape.mask_id().unwrap(), tree);
+                    }
+                    _ => {}
                 }
             }
 
+            // Because we've called saveLayer, this restore makes the newly created
+            // surface to be drawn on the final_surface.
             self.final_surface.canvas().restore();
             self.drawing_surface.canvas().restore();
 

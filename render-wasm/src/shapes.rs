@@ -280,9 +280,24 @@ impl Shape {
         self.clip_content
     }
 
+    pub fn mask_id(&self) -> Option<&Uuid> {
+        self.children.last()
+    }
+
+    // NOTE: I don't like cloning and truncating
+    // list every time we need to access children ids.
     pub fn children_ids(&self) -> Vec<Uuid> {
         if let Kind::Bool(_, _) = self.kind {
             vec![]
+        } else if let Kind::Group(group) = self.kind {
+            if group.masked {
+                let mut cloned_children = self.children
+                    .clone();
+                cloned_children.truncate(self.children.len() - 1);
+                cloned_children
+            } else {
+                self.children.clone()
+            }
         } else {
             self.children.clone()
         }
