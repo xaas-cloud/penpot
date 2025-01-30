@@ -67,21 +67,46 @@ pub extern "C" fn set_canvas_background(raw_color: u32) {
 
 extern "C" {
     fn emscripten_run_script(script: *const i8);
+    fn emscripten_run_script_int(script: *const i8) -> i32;
+}
+
+fn start_animation_frame() -> i32 {
+    let script = std::ffi::CString::new("requestAnimationFrame(_render_2)").unwrap();
+    unsafe { emscripten_run_script_int(script.as_ptr()) }
+}
+
+fn cancel_animation_frame(frame_id: i32) {
+    let cancel_script = format!("cancelAnimationFrame({})", frame_id);
+    let c_cancel_script = std::ffi::CString::new(cancel_script).unwrap();
+    unsafe {
+        emscripten_run_script(c_cancel_script.as_ptr());
+    }
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn render_2(_timestamp: f64) {
+    println!("render_2");
     let state = unsafe { STATE.as_mut() }.expect("Got an invalid state pointer");
     if let Some(pending_render_id) = state.render_state.pending_render_id {
-        println!("pending render {:?}", pending_render_id);
+        println!("------ {:?}", pending_render_id);
+        if let Some(frame_id) = state.render_state.render_frame_id {
+            println!("cancel {:?}", frame_id);
+            cancel_animation_frame(frame_id);
+        }
         state.render_state.init_render_time();
         state.render_all(true);
-        let script = std::ffi::CString::new("requestAnimationFrame(_render_2)").unwrap();
-        unsafe { emscripten_run_script(script.as_ptr()) }
+        state.render_state.render_frame_id = Some(start_animation_frame());
+        println!("frame_id {:?}", state.render_state.render_frame_id);
     } else {
         println!("finish render");
-        state.render_state.flush();        
+        state.render_state.flush();
     }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn render_all_from_cache() {
+    let state = unsafe { STATE.as_mut() }.expect("Got an invalid state pointer");
+    state.render_state.render_all_from_cache();
 }
 
 fn set_next(tree: &mut HashMap<Uuid, Shape>, root_id: Uuid) {
@@ -109,6 +134,7 @@ fn set_next(tree: &mut HashMap<Uuid, Shape>, root_id: Uuid) {
 
 #[no_mangle]
 pub unsafe extern "C" fn render(timestamp: f64) {
+    println!("render");
     let state = unsafe { STATE.as_mut() }.expect("Got an invalid state pointer");
     state.render_state.init_pending_render_id();
     state.render_state.reset_canvas();

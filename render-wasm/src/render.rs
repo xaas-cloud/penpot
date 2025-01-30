@@ -26,10 +26,11 @@ pub use images::*;
 const DEFAULT_FONT_BYTES: &[u8] =
     include_bytes!("../../frontend/resources/fonts/RobotoMono-Regular.ttf");
 extern "C" {
-    fn emscripten_run_script_int(script: *const i8) -> f64;
+    fn emscripten_run_script_int(script: *const i8) -> i32;
+    fn emscripten_run_script(script: *const i8);
 }
 
-fn get_time() -> f64 {
+fn get_time() -> i32 {
     let script = std::ffi::CString::new("performance.now()").unwrap();
     unsafe { emscripten_run_script_int(script.as_ptr()) }
 }
@@ -50,8 +51,9 @@ pub(crate) struct RenderState {
     pub viewbox: Viewbox,
     pub images: ImageStore,
     pub background_color: skia::Color,
-    pub render_time: f64,
+    pub render_time: i32,
     pub pending_render_id: Option<Uuid>,
+    pub render_frame_id: Option<i32>,
 }
 
 impl RenderState {
@@ -89,6 +91,7 @@ impl RenderState {
             background_color: skia::Color::TRANSPARENT,
             render_time: get_time(),
             pending_render_id: None,
+            render_frame_id: None,
         }
     }
 
@@ -278,14 +281,24 @@ impl RenderState {
     }
 
     pub fn pan(&mut self, tree: &mut HashMap<Uuid, Shape>) -> Result<(), String> {
-        if let Some(cached_surface_image) = self.cached_surface_image.as_mut() {
-            let is_dirty = cached_surface_image.is_dirty_for_panning(&self.viewbox);
-            if is_dirty {
-                self.render_all(tree, true);
-            } else {
-                self.render_all_from_cache()?;
-            }
-        }
+        // self.scale(
+        //     self.viewbox.zoom * self.options.dpr(),
+        //     self.viewbox.zoom * self.options.dpr(),
+        // );
+        // self.translate(self.viewbox.pan_x, self.viewbox.pan_y);
+        // self.init_pending_render_id();
+
+        // if let Some(cached_surface_image) = self.cached_surface_image.as_mut() {
+        //     let is_dirty = cached_surface_image.is_dirty_for_panning(&self.viewbox);
+        //     if is_dirty {
+        //         self.render_all(tree, true);
+        //     } else {
+        //         self.render_all_from_cache()?;
+        //     }
+        // }
+        // self.render_all_from_cache()?;
+        // let script = std::ffi::CString::new("requestAnimationFrame(_render)").unwrap();
+        // unsafe { emscripten_run_script(script.as_ptr()) }
 
         Ok(())
     }
@@ -300,14 +313,14 @@ impl RenderState {
             root_uuid = pending_render_id;
         }
 
-        // self.render_shape_tree(&root_uuid, tree);
-        // if generate_cached_surface_image || self.cached_surface_image.is_none() {
-        //     self.cached_surface_image = Some(CachedSurfaceImage {
-        //         image: self.final_surface.image_snapshot(),
-        //         viewbox: self.viewbox,
-        //         has_all_shapes: is_complete,
-        //     });
-        // }
+        self.render_shape_tree(&root_uuid, tree);
+        if generate_cached_surface_image || self.cached_surface_image.is_none() {
+            self.cached_surface_image = Some(CachedSurfaceImage {
+                image: self.final_surface.image_snapshot(),
+                viewbox: self.viewbox,
+                has_all_shapes: true,
+            });
+        }
 
         if self.options.is_debug_visible() {
             self.render_debug();
@@ -318,7 +331,7 @@ impl RenderState {
         self.flush();
     }
 
-    fn render_all_from_cache(&mut self) -> Result<(), String> {
+    pub fn render_all_from_cache(&mut self) -> Result<(), String> {
         self.reset_canvas();
 
         let cached = self
@@ -370,7 +383,7 @@ impl RenderState {
             // }
 
             // let layer_rec = skia::canvas::SaveLayerRec::default().paint(&paint);
-            // This is needed so the next non-children shape does not carry this shape's transform
+            // // This is needed so the next non-children shape does not carry this shape's transform
             // self.final_surface.canvas().save_layer(&layer_rec);
 
             // self.drawing_surface.canvas().save();
@@ -383,7 +396,7 @@ impl RenderState {
 
             let duration = get_time() - self.render_time;
             if let Some(next) = element.next {
-                if duration > 10. {
+                if duration > 10 {
                     self.pending_render_id = Some(next);
                 } else {
                     // self.drawing_surface.canvas().save();
@@ -394,7 +407,6 @@ impl RenderState {
                 self.pending_render_id = None;
             }
             // self.final_surface.canvas().restore();
-
         } else {
             eprintln!("Error: Element with root_id {root_id} not found in the tree.");
         }
