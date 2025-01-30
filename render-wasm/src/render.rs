@@ -300,14 +300,14 @@ impl RenderState {
             root_uuid = pending_render_id;
         }
 
-        self.render_shape_tree(&root_uuid, tree);
-        if generate_cached_surface_image || self.cached_surface_image.is_none() {
-            self.cached_surface_image = Some(CachedSurfaceImage {
-                image: self.final_surface.image_snapshot(),
-                viewbox: self.viewbox,
-                has_all_shapes: is_complete,
-            });
-        }
+        // self.render_shape_tree(&root_uuid, tree);
+        // if generate_cached_surface_image || self.cached_surface_image.is_none() {
+        //     self.cached_surface_image = Some(CachedSurfaceImage {
+        //         image: self.final_surface.image_snapshot(),
+        //         viewbox: self.viewbox,
+        //         has_all_shapes: is_complete,
+        //     });
+        // }
 
         if self.options.is_debug_visible() {
             self.render_debug();
