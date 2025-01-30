@@ -38,17 +38,17 @@ impl<'a> State<'a> {
 
     pub fn pan(&mut self) {
         // TODO: propagate error to main fn
-        let _ = self.render_state.pan(&self.shapes).unwrap();
+        let _ = self.render_state.pan(&mut self.shapes).unwrap();
     }
 
     pub fn zoom(&mut self) {
         // TODO: propagate error to main fn
-        let _ = self.render_state.zoom(&self.shapes).unwrap();
+        let _ = self.render_state.zoom(&mut self.shapes).unwrap();
     }
 
     pub fn render_all(&mut self, generate_cached_surface_image: bool) {
         self.render_state
-            .render_all(&self.shapes, generate_cached_surface_image);
+            .render_all(&mut self.shapes, generate_cached_surface_image);
     }
 
     pub fn use_shape(&'a mut self, id: Uuid) {

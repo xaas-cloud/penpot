@@ -1,4 +1,6 @@
 use skia_safe as skia;
+use std::collections::HashMap;
+use uuid::Uuid;
 
 mod debug;
 mod math;
@@ -9,7 +11,7 @@ mod state;
 mod utils;
 mod view;
 
-use crate::shapes::{BoolType, Kind, Path};
+use crate::shapes::{BoolType, Kind, Path, Shape};
 
 use crate::state::State;
 use crate::utils::uuid_from_u32_quartet;
@@ -63,10 +65,65 @@ pub extern "C" fn set_canvas_background(raw_color: u32) {
     state.set_background_color(color);
 }
 
+extern "C" {
+    fn emscripten_run_script(script: *const i8);
+}
+
 #[no_mangle]
-pub unsafe extern "C" fn render() {
+pub unsafe extern "C" fn render_2(_timestamp: f64) {
     let state = unsafe { STATE.as_mut() }.expect("Got an invalid state pointer");
-    state.render_all(true);
+    if let Some(pending_render_id) = state.render_state.pending_render_id {
+        println!("pending render {:?}", pending_render_id);
+        state.render_state.init_render_time();
+        state.render_all(true);
+        let script = std::ffi::CString::new("requestAnimationFrame(_render_2)").unwrap();
+        unsafe { emscripten_run_script(script.as_ptr()) }
+    } else {
+        println!("finish render");
+        state.render_state.flush();        
+    }
+}
+
+fn set_next(tree: &mut HashMap<Uuid, Shape>, root_id: Uuid) {
+    let mut ordered_nodes = Vec::new();
+
+    fn preorder(tree: &mut HashMap<Uuid, Shape>, node_id: Uuid, order: &mut Vec<Uuid>) {
+        order.push(node_id);
+        if let Some(node) = tree.get(&node_id) {
+            for &child_id in &node.children_ids() {
+                preorder(tree, child_id, order);
+            }
+        }
+    }
+
+    preorder(tree, root_id, &mut ordered_nodes);
+
+    for i in 0..ordered_nodes.len() - 1 {
+        let actual_id = ordered_nodes[i];
+        let nex_id = ordered_nodes[i + 1];
+        if let Some(node) = tree.get_mut(&actual_id) {
+            node.next = Some(nex_id);
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn render(timestamp: f64) {
+    let state = unsafe { STATE.as_mut() }.expect("Got an invalid state pointer");
+    state.render_state.init_pending_render_id();
+    state.render_state.reset_canvas();
+
+    state.render_state.scale(
+        state.render_state.viewbox.zoom * state.render_state.options.dpr(),
+        state.render_state.viewbox.zoom * state.render_state.options.dpr(),
+    );
+    state.render_state.translate(
+        state.render_state.viewbox.pan_x,
+        state.render_state.viewbox.pan_y,
+    );
+
+    set_next(&mut state.shapes, Uuid::nil());
+    render_2(timestamp);
 }
 
 #[no_mangle]

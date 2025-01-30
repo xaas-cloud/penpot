@@ -25,10 +25,18 @@ pub use images::*;
 
 const DEFAULT_FONT_BYTES: &[u8] =
     include_bytes!("../../frontend/resources/fonts/RobotoMono-Regular.ttf");
+extern "C" {
+    fn emscripten_run_script_int(script: *const i8) -> f64;
+}
+
+fn get_time() -> f64 {
+    let script = std::ffi::CString::new("performance.now()").unwrap();
+    unsafe { emscripten_run_script_int(script.as_ptr()) }
+}
 
 pub(crate) struct RenderState {
     gpu_state: GpuState,
-    options: RenderOptions,
+    pub options: RenderOptions,
 
     // TODO: Probably we're going to need
     // a surface stack like the one used
@@ -42,6 +50,8 @@ pub(crate) struct RenderState {
     pub viewbox: Viewbox,
     pub images: ImageStore,
     pub background_color: skia::Color,
+    pub render_time: f64,
+    pub pending_render_id: Option<Uuid>,
 }
 
 impl RenderState {
@@ -77,7 +87,17 @@ impl RenderState {
             viewbox: Viewbox::new(width as f32, height as f32),
             images: ImageStore::new(),
             background_color: skia::Color::TRANSPARENT,
+            render_time: get_time(),
+            pending_render_id: None,
         }
+    }
+
+    pub fn init_render_time(&mut self) {
+        self.render_time = get_time();
+    }
+
+    pub fn init_pending_render_id(&mut self) {
+        self.pending_render_id = Some(Uuid::nil());
     }
 
     pub fn add_font(&mut self, family_name: String, font_data: &[u8]) -> Result<(), String> {
@@ -183,11 +203,11 @@ impl RenderState {
             Some(&skia::Paint::default()),
         );
 
-        self.shadow_surface.canvas().clear(skia::Color::TRANSPARENT);
+        // self.shadow_surface.canvas().clear(skia::Color::TRANSPARENT);
 
-        self.drawing_surface
-            .canvas()
-            .clear(skia::Color::TRANSPARENT);
+        // self.drawing_surface
+        //     .canvas()
+        //     .clear(skia::Color::TRANSPARENT);
     }
 
     pub fn render_shape(&mut self, shape: &mut Shape, clip: bool) {
@@ -244,7 +264,7 @@ impl RenderState {
         self.apply_drawing_to_final_canvas();
     }
 
-    pub fn zoom(&mut self, tree: &HashMap<Uuid, Shape>) -> Result<(), String> {
+    pub fn zoom(&mut self, tree: &mut HashMap<Uuid, Shape>) -> Result<(), String> {
         if let Some(cached_surface_image) = self.cached_surface_image.as_mut() {
             let is_dirty = cached_surface_image.is_dirty_for_zooming(&self.viewbox);
             if is_dirty {
@@ -257,7 +277,7 @@ impl RenderState {
         Ok(())
     }
 
-    pub fn pan(&mut self, tree: &HashMap<Uuid, Shape>) -> Result<(), String> {
+    pub fn pan(&mut self, tree: &mut HashMap<Uuid, Shape>) -> Result<(), String> {
         if let Some(cached_surface_image) = self.cached_surface_image.as_mut() {
             let is_dirty = cached_surface_image.is_dirty_for_panning(&self.viewbox);
             if is_dirty {
@@ -270,16 +290,17 @@ impl RenderState {
         Ok(())
     }
 
-    pub fn render_all(&mut self, tree: &HashMap<Uuid, Shape>, generate_cached_surface_image: bool) {
-        self.reset_canvas();
-        self.scale(
-            self.viewbox.zoom * self.options.dpr(),
-            self.viewbox.zoom * self.options.dpr(),
-        );
-        self.translate(self.viewbox.pan_x, self.viewbox.pan_y);
+    pub fn render_all(
+        &mut self,
+        tree: &mut HashMap<Uuid, Shape>,
+        generate_cached_surface_image: bool,
+    ) {
+        let mut root_uuid = Uuid::nil();
+        if let Some(pending_render_id) = self.pending_render_id {
+            root_uuid = pending_render_id;
+        }
 
-        // Reset shape tree
-        let is_complete = self.render_shape_tree(&Uuid::nil(), tree);
+        self.render_shape_tree(&root_uuid, tree);
         if generate_cached_surface_image || self.cached_surface_image.is_none() {
             self.cached_surface_image = Some(CachedSurfaceImage {
                 image: self.final_surface.image_snapshot(),
@@ -338,57 +359,44 @@ impl RenderState {
     }
 
     // Returns a boolean indicating if the viewbox contains the rendered shapes
-    fn render_shape_tree(&mut self, root_id: &Uuid, tree: &HashMap<Uuid, Shape>) -> bool {
-        if let Some(element) = tree.get(&root_id) {
-            let mut is_complete = self.viewbox.area.contains(element.bounds());
+    fn render_shape_tree(&mut self, root_id: &Uuid, tree: &mut HashMap<Uuid, Shape>) {
+        if let Some(element) = &mut tree.get_mut(&root_id) {
+            // let mut paint = skia::Paint::default();
+            // paint.set_blend_mode(element.blend_mode().into());
+            // paint.set_alpha_f(element.opacity());
+            // let filter = element.image_filter(self.viewbox.zoom * self.options.dpr());
+            // if let Some(image_filter) = filter {
+            //     paint.set_image_filter(image_filter);
+            // }
 
-            if !root_id.is_nil() {
-                if !element.bounds().intersects(self.viewbox.area) || element.hidden() {
-                    debug::render_debug_element(self, element, false);
-                    // TODO: This means that not all the shapes are rendered so we
-                    // need to call a render_all on the zoom out.
-                    return is_complete; // TODO return is_complete or return false??
-                } else {
-                    debug::render_debug_element(self, element, true);
-                }
-            }
-
-            let mut paint = skia::Paint::default();
-            paint.set_blend_mode(element.blend_mode().into());
-            paint.set_alpha_f(element.opacity());
-            let filter = element.image_filter(self.viewbox.zoom * self.options.dpr());
-            if let Some(image_filter) = filter {
-                paint.set_image_filter(image_filter);
-            }
-
-            let layer_rec = skia::canvas::SaveLayerRec::default().paint(&paint);
+            // let layer_rec = skia::canvas::SaveLayerRec::default().paint(&paint);
             // This is needed so the next non-children shape does not carry this shape's transform
-            self.final_surface.canvas().save_layer(&layer_rec);
+            // self.final_surface.canvas().save_layer(&layer_rec);
 
-            self.drawing_surface.canvas().save();
+            // self.drawing_surface.canvas().save();
             if !root_id.is_nil() {
-                self.render_shape(&mut element.clone(), element.clip());
+                self.render_shape(element, element.clip());
             } else {
                 self.apply_drawing_to_final_canvas();
             }
+            // self.drawing_surface.canvas().restore();
 
-            self.drawing_surface.canvas().restore();
-
-            // draw all the children shapes
-            if element.is_recursive() {
-                for id in element.children_ids() {
-                    self.drawing_surface.canvas().save();
-                    is_complete = self.render_shape_tree(&id, tree) && is_complete;
-                    self.drawing_surface.canvas().restore();
+            let duration = get_time() - self.render_time;
+            if let Some(next) = element.next {
+                if duration > 10. {
+                    self.pending_render_id = Some(next);
+                } else {
+                    // self.drawing_surface.canvas().save();
+                    self.render_shape_tree(&next, tree);
+                    // self.drawing_surface.canvas().restore();
                 }
+            } else {
+                self.pending_render_id = None;
             }
+            // self.final_surface.canvas().restore();
 
-            self.final_surface.canvas().restore();
-
-            return is_complete;
         } else {
             eprintln!("Error: Element with root_id {root_id} not found in the tree.");
-            return false;
         }
     }
 }

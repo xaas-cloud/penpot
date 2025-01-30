@@ -27,6 +27,8 @@
    [rumext.v2 :as mf]))
 
 (defonce internal-frame-id nil)
+(defonce internal-pan-frame-id nil)
+(defonce internal-zoom-frame-id nil)
 (defonce internal-module #js {})
 (defonce use-dpr? (contains? cf/flags :render-wasm-dpr))
 
@@ -576,14 +578,13 @@
 (defn set-canvas-background
   [background]
   (let [rgba (rgba-from-hex background 1)]
-    (h/call internal-module "_set_canvas_background" rgba)
-    (request-render "set-canvas-background")))
+    (h/call internal-module "_set_canvas_background" rgba)))
 
 (defn initialize
   [base-objects zoom vbox background]
   (let [rgba (rgba-from-hex background 1)]
     (h/call internal-module "_set_canvas_background" rgba)
-    (h/call internal-module "_set_view" zoom (- (:x vbox)) (- (:y vbox)))
+    (h/call internal-module "_set_view" zoom (- (:x vbox)) (- (:y vbox))) 
     (set-objects base-objects)))
 
 (def ^:private canvas-options

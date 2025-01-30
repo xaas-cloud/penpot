@@ -56,6 +56,7 @@ pub struct Shape {
     pub svg: Option<skia::svg::Dom>,
     pub svg_attrs: HashMap<String, String>,
     shadows: Vec<Shadow>,
+    pub next: Option<Uuid>,
 }
 
 impl Shape {
@@ -77,6 +78,7 @@ impl Shape {
             svg: None,
             svg_attrs: HashMap::new(),
             shadows: vec![],
+            next: None,
         }
     }
 
