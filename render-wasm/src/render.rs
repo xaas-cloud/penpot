@@ -391,7 +391,7 @@ impl RenderState {
 
                     let layer_rec = skia::canvas::SaveLayerRec::default().paint(&paint);
                     // This is needed so the next non-children shape does not carry this shape's transform
-                    println!("save final_surface layer");
+                    // println!("save final_surface layer");
                     self.final_surface.canvas().save_layer(&layer_rec);
                 }
             }
@@ -418,26 +418,26 @@ impl RenderState {
                 if relationship == "up" {
                     if let Some(degree) = element.degree {
                         for _ in 0..degree {
-                            println!("restore final_surface layer");
+                            // println!("restore final_surface layer");
                             self.final_surface.canvas().restore();
                         }
                     }
                 }
             }
 
-            println!(
-                "element {:?} {:?} {:?} {:?}",
-                root_id, element.next, element.relationship, element.degree
-            );
+            // println!(
+            //     "element {:?} {:?} {:?} {:?}",
+            //     root_id, element.next, element.relationship, element.degree
+            // );
 
             let duration = get_time() - self.render_time;
             if let Some(next) = element.next {
                 //TODO 10?
-                if duration > 10000 {
+                self.drawing_surface.canvas().save();
+                if duration > 10 {
                     self.pending_render_id = Some(next);
                 } else {
-                    println!("save drawing_surface layer");
-                    self.drawing_surface.canvas().save();
+                    // println!("save drawing_surface layer");
                     is_complete = self.render_shape_tree(&next, tree) && is_complete;
                     //
                 }
@@ -446,7 +446,7 @@ impl RenderState {
             }
 
             if degree == 0 {
-                println!("restore drawing_surface");
+                // println!("restore drawing_surface");
                 self.drawing_surface.canvas().restore();
             }
 
