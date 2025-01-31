@@ -116,26 +116,74 @@ pub unsafe extern "C" fn render_all_from_cache() {
 
 fn set_next(tree: &mut HashMap<Uuid, Shape>, root_id: Uuid) {
     let mut ordered_nodes = Vec::new();
+    let mut depth_map = HashMap::new();
 
-    fn preorder(tree: &mut HashMap<Uuid, Shape>, node_id: Uuid, order: &mut Vec<Uuid>) {
+    fn preorder(
+        tree: &HashMap<Uuid, Shape>,
+        node_id: Uuid,
+        order: &mut Vec<Uuid>,
+        depth_map: &mut HashMap<Uuid, u32>,
+        depth: u32,
+    ) {
         order.push(node_id);
+        depth_map.insert(node_id, depth);
         if let Some(node) = tree.get(&node_id) {
             for &child_id in &node.children_ids() {
-                preorder(tree, child_id, order);
+                preorder(tree, child_id, order, depth_map, depth + 1);
             }
         }
     }
 
-    preorder(tree, root_id, &mut ordered_nodes);
+    preorder(tree, root_id, &mut ordered_nodes, &mut depth_map, 0);
 
     for i in 0..ordered_nodes.len() - 1 {
         let actual_id = ordered_nodes[i];
-        let nex_id = ordered_nodes[i + 1];
+        let next_id = ordered_nodes[i + 1];
+
         if let Some(node) = tree.get_mut(&actual_id) {
-            node.next = Some(nex_id);
+            node.next = Some(next_id);
+        }
+
+        if let (Some(&depth_actual), Some(&depth_next)) =
+            (depth_map.get(&actual_id), depth_map.get(&next_id))
+        {
+            let degree = (depth_next as i32 - depth_actual as i32).abs() as u32;
+            let relationship = if depth_next > depth_actual {
+                "down"
+            } else {
+                "up"
+            };
+
+            if let Some(node) = tree.get_mut(&actual_id) {
+                node.relationship = Some(relationship.to_string());
+                node.degree = Some(degree);
+            }
         }
     }
 }
+
+// fn set_next(tree: &mut HashMap<Uuid, Shape>, root_id: Uuid) {
+//     let mut ordered_nodes = Vec::new();
+
+//     fn preorder(tree: &mut HashMap<Uuid, Shape>, node_id: Uuid, order: &mut Vec<Uuid>) {
+//         order.push(node_id);
+//         if let Some(node) = tree.get(&node_id) {
+//             for &child_id in &node.children_ids() {
+//                 preorder(tree, child_id, order);
+//             }
+//         }
+//     }
+
+//     preorder(tree, root_id, &mut ordered_nodes);
+
+//     for i in 0..ordered_nodes.len() - 1 {
+//         let actual_id = ordered_nodes[i];
+//         let nex_id = ordered_nodes[i + 1];
+//         if let Some(node) = tree.get_mut(&actual_id) {
+//             node.next = Some(nex_id);
+//         }
+//     }
+// }
 
 #[no_mangle]
 pub unsafe extern "C" fn render(timestamp: f64) {

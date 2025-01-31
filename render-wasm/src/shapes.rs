@@ -57,6 +57,8 @@ pub struct Shape {
     pub svg_attrs: HashMap<String, String>,
     shadows: Vec<Shadow>,
     pub next: Option<Uuid>,
+    pub relationship: Option<String>,
+    pub degree: Option<u32>,
 }
 
 impl Shape {
@@ -79,6 +81,8 @@ impl Shape {
             svg_attrs: HashMap::new(),
             shadows: vec![],
             next: None,
+            relationship: None,
+            degree: None,
         }
     }
 

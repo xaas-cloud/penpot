@@ -379,6 +379,22 @@ impl RenderState {
     fn render_shape_tree(&mut self, root_id: &Uuid, tree: &mut HashMap<Uuid, Shape>) -> bool {
         if let Some(element) = &mut tree.get_mut(&root_id) {
             let mut is_complete = self.viewbox.area.contains(element.bounds());
+            if let Some(relationship) = &element.relationship {
+                if relationship == "down" {
+                    let mut paint = skia::Paint::default();
+                    paint.set_blend_mode(element.blend_mode().into());
+                    paint.set_alpha_f(element.opacity());
+                    let filter = element.image_filter(self.viewbox.zoom * self.options.dpr());
+                    if let Some(image_filter) = filter {
+                        paint.set_image_filter(image_filter);
+                    }
+
+                    let layer_rec = skia::canvas::SaveLayerRec::default().paint(&paint);
+                    // This is needed so the next non-children shape does not carry this shape's transform
+                    println!("save final_surface layer");
+                    self.final_surface.canvas().save_layer(&layer_rec);
+                }
+            }
             if !root_id.is_nil() {
                 if !element.bounds().intersects(self.viewbox.area) || element.hidden() {
                     // TODO: aquí el next debería de ser otra cosa porque podamos esta rama del árbol
@@ -388,40 +404,53 @@ impl RenderState {
                     // return is_complete; // TODO return is_complete or return false??
                 } else {
                     debug::render_debug_element(self, element, true);
-                    // println!("RENDER SHAPE {:?}", root_id);
+                    // println!("RENDER SHAPE {:?}", root_id);.
+                    self.drawing_surface.canvas().save();
                     self.render_shape(element, element.clip());
+                    self.drawing_surface.canvas().restore();
                 }
             } else {
                 self.apply_drawing_to_final_canvas();
             }
-            // let mut paint = skia::Paint::default();
-            // paint.set_blend_mode(element.blend_mode().into());
-            // paint.set_alpha_f(element.opacity());
-            // let filter = element.image_filter(self.viewbox.zoom * self.options.dpr());
-            // if let Some(image_filter) = filter {
-            //     paint.set_image_filter(image_filter);
-            // }
 
-            // let layer_rec = skia::canvas::SaveLayerRec::default().paint(&paint);
-            // // This is needed so the next non-children shape does not carry this shape's transform
-            // self.final_surface.canvas().save_layer(&layer_rec);
+            let mut degree = 0;
+            if let Some(relationship)  = &element.relationship {
+                if relationship == "up" {
+                    if let Some(degree) = element.degree {
+                        for _ in 0..degree {
+                            println!("restore final_surface layer");
+                            self.final_surface.canvas().restore();
+                        }
+                    }
+                }
+            }
 
-            // self.drawing_surface.canvas().save();
-            // self.drawing_surface.canvas().restore();
+            println!(
+                "element {:?} {:?} {:?} {:?}",
+                root_id, element.next, element.relationship, element.degree
+            );
 
             let duration = get_time() - self.render_time;
             if let Some(next) = element.next {
-                if duration > 10 {
+                //TODO 10?
+                if duration > 10000 {
                     self.pending_render_id = Some(next);
                 } else {
-                    // self.drawing_surface.canvas().save();
+                    println!("save drawing_surface layer");
+                    self.drawing_surface.canvas().save();
                     is_complete = self.render_shape_tree(&next, tree) && is_complete;
-                    // self.drawing_surface.canvas().restore();
+                    //
                 }
             } else {
                 self.pending_render_id = None;
             }
-            // self.final_surface.canvas().restore();
+
+            if degree == 0 {
+                println!("restore drawing_surface");
+                self.drawing_surface.canvas().restore();
+            }
+
+            self.final_surface.canvas().restore();
             return is_complete;
         } else {
             eprintln!("Error: Element with root_id {root_id} not found in the tree.");
