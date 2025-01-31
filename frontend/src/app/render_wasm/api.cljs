@@ -480,6 +480,7 @@
 (defn set-shape-shadows
   [shadows]
   (h/call internal-module "_clear_shape_shadows")
+  (js/console.log (clj->js shadows))
   (let [total-shadows (count shadows)]
     (loop [index 0]
       (when (< index total-shadows)

@@ -1,5 +1,5 @@
 use skia::Contains;
-use skia_safe as skia;
+use skia_safe::{self as skia, Rect};
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -36,6 +36,7 @@ pub(crate) struct RenderState {
     pub final_surface: skia::Surface,
     pub drawing_surface: skia::Surface,
     pub shadow_surface: skia::Surface,
+    pub overlay_surface: skia::Surface,
     pub debug_surface: skia::Surface,
     pub font_provider: skia::textlayout::TypefaceFontProvider,
     pub cached_surface_image: Option<CachedSurfaceImage>,
@@ -50,6 +51,9 @@ impl RenderState {
         let mut gpu_state = GpuState::new();
         let mut final_surface = gpu_state.create_target_surface(width, height);
         let shadow_surface = final_surface
+            .new_surface_with_dimensions((width, height))
+            .unwrap();
+        let overlay_surface = final_surface
             .new_surface_with_dimensions((width, height))
             .unwrap();
         let drawing_surface = final_surface
@@ -68,6 +72,7 @@ impl RenderState {
         RenderState {
             gpu_state,
             final_surface,
+            overlay_surface,
             shadow_surface,
             drawing_surface,
             debug_surface,
@@ -122,6 +127,11 @@ impl RenderState {
 
         let surface = self.gpu_state.create_target_surface(dpr_width, dpr_height);
         self.final_surface = surface;
+
+        self.overlay_surface = self
+            .final_surface
+            .new_surface_with_dimensions((dpr_width, dpr_height))
+            .unwrap();
         self.shadow_surface = self
             .final_surface
             .new_surface_with_dimensions((dpr_width, dpr_height))
@@ -161,6 +171,10 @@ impl RenderState {
             .canvas()
             .clear(self.background_color)
             .reset_matrix();
+        self.overlay_surface
+            .canvas()
+            .clear(self.background_color)
+            .reset_matrix();
         self.final_surface
             .canvas()
             .clear(self.background_color)
@@ -183,7 +197,20 @@ impl RenderState {
             Some(&skia::Paint::default()),
         );
 
+        self.gpu_state
+            .context
+            .flush_and_submit_surface(&mut self.overlay_surface, None);
+        self.overlay_surface.draw(
+            &mut self.final_surface.canvas(),
+            (0.0, 0.0),
+            skia::SamplingOptions::new(skia::FilterMode::Linear, skia::MipmapMode::Nearest),
+            None,
+        );
+
         self.shadow_surface.canvas().clear(skia::Color::TRANSPARENT);
+        self.overlay_surface
+            .canvas()
+            .clear(skia::Color::TRANSPARENT);
 
         self.drawing_surface
             .canvas()
@@ -239,6 +266,10 @@ impl RenderState {
 
         for shadow in shape.drop_shadows().rev().filter(|s| !s.hidden()) {
             shadows::render_drop_shadow(self, shadow, self.viewbox.zoom * self.options.dpr());
+        }
+
+        for shadow in shape.inner_shadows().rev().filter(|s| !s.hidden()) {
+            shadows::render_inner_shadow(self, shadow, self.viewbox.zoom * self.options.dpr());
         }
 
         self.apply_drawing_to_final_canvas();

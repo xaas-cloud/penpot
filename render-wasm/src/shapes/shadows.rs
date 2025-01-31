@@ -1,4 +1,4 @@
-use skia_safe::{self as skia, image_filters};
+use skia_safe::{self as skia, image_filters, BlurStyle, ImageFilter, MaskFilter, PaintStyle};
 
 use super::Color;
 
@@ -26,10 +26,10 @@ impl Default for ShadowStyle {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Shadow {
-    color: Color,
-    blur: f32,
+    pub color: Color,
+    pub blur: f32,
     spread: f32,
-    offset: (f32, f32),
+    pub offset: (f32, f32),
     style: ShadowStyle,
     hidden: bool,
 }
@@ -64,23 +64,43 @@ impl Shadow {
 
     pub fn to_paint(&self, dilate: bool, scale: f32) -> skia::Paint {
         let mut paint = skia::Paint::default();
-        let mut filter = image_filters::drop_shadow_only(
-            (self.offset.0 * scale, self.offset.1 * scale),
-            (self.blur * scale, self.blur * scale),
-            self.color,
-            None,
-            None,
-            None,
-        );
+
+        let (image_filter, mask_filter) = self.filters(dilate, scale);
+
+        if mask_filter.is_some() {
+            paint.set_mask_filter(mask_filter);
+            paint.set_color(self.color);
+        }
+
+        paint.set_image_filter(image_filter);
+        paint.set_anti_alias(true);
+
+        paint
+    }
+
+    fn filters(&self, dilate: bool, scale: f32) -> (Option<ImageFilter>, Option<MaskFilter>) {
+        let mut filter = match self.style {
+            ShadowStyle::Drop => image_filters::drop_shadow_only(
+                (self.offset.0 * scale, self.offset.1 * scale),
+                (self.blur * scale, self.blur * scale),
+                self.color,
+                None,
+                None,
+                None,
+            ),
+            ShadowStyle::Inner => None,
+        };
+
+        let mask_filter = match self.style {
+            ShadowStyle::Drop => None,
+            ShadowStyle::Inner => MaskFilter::blur(BlurStyle::Normal, self.blur * scale, true),
+        };
 
         if dilate {
             filter =
                 image_filters::dilate((self.spread * scale, self.spread * scale), filter, None);
         }
 
-        paint.set_image_filter(filter);
-        paint.set_anti_alias(true);
-
-        paint
+        (filter, mask_filter)
     }
 }
