@@ -107,6 +107,10 @@ pub unsafe extern "C" fn render_2(_timestamp: f64) {
 pub unsafe extern "C" fn render_all_from_cache() {
     let state = unsafe { STATE.as_mut() }.expect("Got an invalid state pointer");
     // println!("render_all_from_cache");
+    if let Some(frame_id) = state.render_state.render_frame_id {
+        // println!("cancel {:?}", frame_id);
+        cancel_animation_frame(frame_id);
+    }
     state.render_state.render_all_from_cache();
 }
 
