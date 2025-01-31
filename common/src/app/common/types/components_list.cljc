@@ -48,7 +48,7 @@
                        (wrap-object-fn)))))))
 
 (defn mod-component
-  [file-data {:keys [id name path main-instance-id main-instance-page objects annotation modified-at]}]
+  [file-data {:keys [id name path main-instance-id main-instance-page objects annotation variation-id variation-properties modified-at]}]
   (let [wrap-objects-fn cfeat/*wrap-with-objects-map-fn*]
     (d/update-in-when file-data [:components id]
                       (fn [component]
@@ -76,10 +76,22 @@
                                          (assoc :annotation annotation)
 
                                          (nil? annotation)
-                                         (dissoc :annotation))
+                                         (dissoc :annotation)
+
+                                         (some? variation-id)
+                                         (assoc :variation-id variation-id)
+
+                                         (nil? variation-id)
+                                         (dissoc :variation-id)
+
+                                         (some? variation-properties)
+                                         (assoc :variation-properties variation-properties)
+
+                                         (nil? variation-properties)
+                                         (dissoc :variation-properties))
                               diff     (set/difference
                                         (ctk/diff-components component new-comp)
-                                        #{:annotation :modified-at})] ;; The set of properties that doesn't mark a component as touched
+                                        #{:annotation :modified-at :variation-id :variation-properties})] ;; The set of properties that doesn't mark a component as touched
 
                           (if (empty? diff)
                             new-comp

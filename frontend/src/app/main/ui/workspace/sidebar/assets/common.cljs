@@ -20,6 +20,7 @@
    [app.main.data.workspace :as dw]
    [app.main.data.workspace.libraries :as dwl]
    [app.main.data.workspace.undo :as dwu]
+   [app.main.data.workspace.variations :as dwv]
    [app.main.refs :as refs]
    [app.main.render :refer [component-svg component-svg-thumbnail]]
    [app.main.store :as st]
@@ -405,6 +406,9 @@
         do-create-annotation
         #(st/emit! (dw/set-annotations-id-for-create id))
 
+        do-add-variation
+        #(st/emit! (dwv/add-variation id))
+
         do-show-local-component
         #(st/emit! (dwl/go-to-local-component :id component-id))
 
@@ -454,5 +458,8 @@
                          :action do-show-component})
                       (when can-update-main?
                         {:title (tr "workspace.shape.menu.update-main")
-                         :action do-update-component})]]
+                         :action do-update-component})
+                      (when (and (not multi) main-instance?)
+                        {:title (tr "workspace.shape.menu.add-variation")
+                         :action do-add-variation})]]
     (filter (complement nil?) menu-entries)))

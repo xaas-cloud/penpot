@@ -15,6 +15,7 @@
    [app.main.data.workspace :as dw]
    [app.main.data.workspace.libraries :as dwl]
    [app.main.data.workspace.specialized-panel :as dwsp]
+   [app.main.data.workspace.variations :as dwv]
    [app.main.refs :as refs]
    [app.main.store :as st]
    [app.main.ui.components.dropdown :refer [dropdown]]
@@ -29,6 +30,7 @@
    [app.util.debug :as dbg]
    [app.util.dom :as dom]
    [app.util.i18n :as i18n :refer [tr]]
+   [app.util.keyboard :as kbd]
    [app.util.timers :as tm]
    [cuerdas.core :as str]
    [okulary.core :as l]
@@ -224,6 +226,65 @@
            :read-only (not (or creating? editing?))}]]
         (when (or editing? creating?)
           [:div {:class (stl/css  :counter)} (str size "/300")])]])))
+
+
+(mf/defc component-variation*
+  {::mf/props :obj}
+  [{:keys [component shape libraries]}]
+  (let [properties (:variation-properties component)
+        data (get-in libraries [(:component-file shape) :data])
+        variation-id (:variation-id component)
+
+        related-components (->> data
+                                :components
+                                (filter #(= (:variation-id %) variation-id)))
+
+        options (reduce
+                 (fn [acc [k {:keys [variation-properties]}]]
+                   (reduce
+                    (fn [acc [prop val]]
+                      (update acc prop conj {:value k :label val}))
+                    acc
+                    variation-properties))
+                 {}
+                 (:components related-components))
+
+        handle-change (mf/use-fn
+                       (mf/deps component)
+                       (fn [key event]
+                         (let [value (dom/get-target-val event)]
+                           (st/emit! (dwv/update-property-value (:id component) key value)))))
+        handle-key-down
+        (mf/use-fn
+         (fn [event]
+           (let [enter? (kbd/enter? event)
+                 esc?   (kbd/esc? event)
+                 node   (dom/get-target event)]
+             (when ^boolean enter? (dom/blur! node))
+             (when ^boolean esc? (dom/blur! node)))))
+
+        on-property-change (mf/use-fn
+                            (mf/deps shape)
+                            (fn [id]
+                              (st/emit! (dwl/component-swap shape (:component-file shape) id))))]
+  [:*
+   (for [[key value] properties]
+     [:div {:key (str (:id component) key) :class (stl/css :variation-property-container)}
+      (if (ctk/main-instance? shape)
+
+        [:* [:span (name key)]
+         [:input {:id (str (:id component) key)
+                  :class (stl/css :variation-property-value)
+                  :on-change (partial handle-change key)
+                  :value value
+                  :on-key-down handle-key-down}]]
+
+        [:*
+         [:span (name key)]
+         [:& select {:default-value (:id component)
+                     :options (get options key)
+                     :on-change on-property-change}]])])
+   ]))
 
 (mf/defc component-swap-item
   {::mf/props :obj}
@@ -537,6 +598,7 @@
                                                    current-file
                                                    libraries
                                                    {:include-deleted? true})
+        is-variation?       (ctk/is-variation? component)
         main-instance?      (ctk/main-instance? shape)
 
         toggle-content
@@ -642,6 +704,127 @@
             [:& component-swap {:shapes copies}])
 
           (when (and (not swap-opened?) (not multi))
-            [:& component-annotation {:id id :shape shape :component component :rerender-fn rerender-fn}])
+            [:& component-annotation {:id id :shape shape :component component :rerender-fn rerender-fn}]
+            (when is-variation?
+              [:> component-variation* {:component component :shape shape :libraries libraries}]))
+
+
+
+
           (when (dbg/enabled? :display-touched)
             [:div ":touched " (str (:touched shape))])])])))
+
+
+(mf/defc variation-menu
+  {::mf/props :obj}
+  [{:keys [shapes]}]
+  (let [menu-entries         [{:title (tr "workspace.shape.menu.add-variation-property")
+                               :action identity}]
+        show-menu?           (seq menu-entries)
+
+        ;; TODO check multi. What is shown? User can change properties like width?
+        multi                (> (count shapes) 1)
+
+        shape               (first shapes)
+        shape-name          (:name shape)
+
+        libraries           (deref refs/libraries)
+        current-file-id     (mf/use-ctx ctx/current-file-id)
+        data                (get-in libraries [current-file-id :data])
+
+        objects             (mf/deref refs/workspace-page-objects)
+        first-variation     (get objects (first (:shapes shape)))
+
+
+
+        component-id        (:component-id first-variation)
+
+        component           (ctf/get-component libraries current-file-id component-id) ;;todo include-deleted?
+        variation-id (:variation-id component)
+
+        related-components (->> data
+                                :components
+                                vals
+                                (filter #(= (:variation-id %) variation-id)))
+
+        properties (reduce
+                    (fn [acc {:keys [variation-properties]}]
+                      (reduce
+                       (fn [acc [prop val]]
+                         (update acc prop conj val))
+                       acc
+                       variation-properties))
+                    {}
+                    related-components)
+
+        _ (prn (:component-file shape))
+        _ (prn properties)
+
+        state*              (mf/use-state
+                             #(do {:show-content true
+                                   :menu-open false}))
+        state               (deref state*)
+        menu-open?          (:menu-open state)
+
+
+
+        on-menu-click
+        (mf/use-fn
+         (fn [event]
+           (dom/prevent-default event)
+           (dom/stop-propagation event)
+           (swap! state* update :menu-open not)))
+
+        on-menu-close
+        (mf/use-fn
+         #(swap! state* assoc :menu-open false))]
+    (when (seq shapes)
+      [:div {:class (stl/css :element-set)}
+       [:div {:class (stl/css :element-title)}
+
+
+        [:& title-bar {:collapsable  false
+                       :title        (tr "workspace.options.component")
+                       :class        (stl/css :title-spacing-component)}
+         [:span {:class (stl/css :copy-text)}
+          (tr "workspace.options.component.main")]]]
+
+       [:div {:class (stl/css :element-content)}
+        [:div {:class (stl/css-case :component-wrapper true
+                                    :with-actions show-menu?
+                                    :without-actions (not show-menu?))}
+         [:button {:class (stl/css-case :component-name-wrapper true
+                                        :with-main true
+                                        :swappeable false)}
+
+          [:span {:class (stl/css :component-icon)} i/component]
+
+          [:div {:class (stl/css :name-wrapper)}
+           [:div {:class (stl/css :component-name)}
+            [:span {:class (stl/css :component-name-inside)}
+             (if multi
+               (tr "settings.multiple")
+               (cfh/last-path shape-name))]]]]
+
+
+         (when show-menu?
+           [:div {:class (stl/css :component-actions)}
+            [:button {:class (stl/css-case :menu-btn true
+                                           :selected menu-open?)
+                      :on-click on-menu-click}
+             i/menu]
+
+            [:& component-ctx-menu {:show menu-open?
+                                    :on-close on-menu-close
+                                    :menu-entries menu-entries
+                                    :main-instance true}]])]
+        [:*
+         (for [[key value] properties]
+           [:div {:key (str (:id component) key) :class (stl/css :variation-property-container)}
+
+            [:span (str (name key) ": ")]
+            [:span (str/join ", " (sort value))]])]
+        ]
+
+
+       ])))

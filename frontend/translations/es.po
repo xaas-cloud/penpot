@@ -6191,6 +6191,12 @@ msgstr "Tablero de selección"
 msgid "workspace.shape.menu.create-component"
 msgstr "Crear componente"
 
+msgid "workspace.shape.menu.add-variation"
+msgstr "Añadir variante"
+
+msgid "workspace.shape.menu.add-variation-property"
+msgstr "Añadir nueva propiedad"
+
 #: src/app/main/ui/workspace/context_menu.cljs:565
 msgid "workspace.shape.menu.create-multiple-components"
 msgstr "Crear múltiples componentes"

@@ -5,6 +5,7 @@
 // Copyright (c) KALEIDOS INC
 
 @import "refactor/common-refactor.scss";
+
 .element-set {
   margin: 0;
   padding-top: $s-8;
@@ -33,6 +34,7 @@
   @include flexCenter;
   width: $s-12;
   height: 100%;
+
   svg {
     height: $s-12;
     width: $s-12;
@@ -54,6 +56,7 @@
 
   &.without-actions {
     padding-right: 0.5rem;
+
     .component-name-wrapper {
       width: 100%;
       border-radius: $br-8;
@@ -71,6 +74,7 @@
   border-radius: $br-8 0 0 $br-8;
   background-color: var(--assets-item-background-color);
   color: var(--assets-item-name-foreground-color-hover);
+
   &:hover {
     background-color: var(--assets-item-background-color-hover);
     color: var(--assets-item-name-foreground-color-hover);
@@ -81,6 +85,7 @@
   @include flexCenter;
   height: $s-32;
   width: $s-12;
+
   svg {
     @extend .button-icon-small;
     stroke: var(--icon-foreground);
@@ -129,14 +134,17 @@
   border-radius: 0 $br-8 $br-8 0;
   background-color: var(--assets-item-background-color);
   color: var(--assets-item-name-foreground-color-hover);
+
   svg {
     @extend .button-icon;
     min-height: $s-16;
     min-width: $s-16;
   }
+
   &:hover {
     background-color: var(--assets-item-background-color-hover);
     color: var(--assets-item-name-foreground-color-hover);
+
     &.selected {
       @extend .button-icon-selected;
     }
@@ -177,6 +185,7 @@
 
 .icon-wrapper {
   display: flex;
+
   svg {
     @extend .button-icon-small;
     stroke: var(--icon-foreground);
@@ -192,9 +201,11 @@
   border: 0;
   font-size: $fs-12;
   color: var(--input-foreground-color-active);
+
   &::placeholder {
     color: var(--input-foreground-color-disabled);
   }
+
   &:focus-visible {
     border-color: var(--input-border-outline-color-active);
   }
@@ -205,8 +216,10 @@
   @include flexCenter;
   height: $s-16;
   width: $s-16;
+
   .clear-icon {
     @include flexCenter;
+
     svg {
       @extend .button-icon-small;
       stroke: var(--icon-foreground);
@@ -218,6 +231,7 @@
   @include flexCenter;
   width: $s-12;
   margin-left: $s-8;
+
   svg {
     @extend .button-icon-small;
     stroke: var(--icon-foreground);
@@ -240,6 +254,7 @@
 .back-arrow {
   @include flexCenter;
   height: $s-32;
+
   svg {
     height: $s-12;
     width: $s-12;
@@ -329,6 +344,7 @@
   --assets-component-current-border-color: var(--assets-component-border-color);
   border: $s-4 solid var(--assets-component-current-border-color);
   cursor: pointer;
+
   img {
     height: auto;
     width: auto;
@@ -337,12 +353,14 @@
     pointer-events: none;
     border: 0;
   }
+
   svg {
     height: 100%;
     width: 100%;
     stroke: none;
     object-fit: contain;
   }
+
   .component-name {
     @include bodySmallTypography;
     @include textEllipsis;
@@ -358,6 +376,7 @@
 
   &:hover {
     background-color: var(--assets-item-background-color-hover);
+
     .component-name {
       display: block;
       color: var(--assets-item-name-foreground-color-hover);
@@ -367,6 +386,7 @@
 
   &.selected {
     --assets-component-current-border-color: var(--assets-item-border-color);
+
     .component-name {
       color: var(--assets-item-name-foreground-color-hover);
     }
@@ -375,15 +395,15 @@
   &.disabled {
     background: var(--assets-component-background-color-disabled);
     cursor: auto;
+
     svg {
       cursor: auto;
     }
+
     .component-name {
-      background: linear-gradient(
-        to top,
-        var(--assets-component-background-color-disabled) 0%,
-        transparent 100%
-      );
+      background: linear-gradient(to top,
+          var(--assets-component-background-color-disabled) 0%,
+          transparent 100%);
       color: var(--assets-item-name-foreground-color-hover);
     }
   }
@@ -461,8 +481,10 @@
     @include textEllipsis;
     color: var(--assets-item-name-foreground-color);
   }
+
   &:hover {
     color: var(--assets-item-name-foreground-color-hover);
+
     .component-group-name {
       color: var(--assets-item-name-foreground-color-hover);
     }
@@ -472,6 +494,7 @@
 .arrow-icon {
   @include flexCenter;
   height: $s-32;
+
   svg {
     height: $s-12;
     width: $s-12;
@@ -525,12 +548,14 @@
       margin: 0;
       padding: 0;
       cursor: pointer;
+
       svg {
         @extend .button-icon;
         stroke: var(--icon-foreground);
         width: $s-16;
         height: $s-16;
       }
+
       &.expanded svg {
         transform: rotate(90deg);
       }
@@ -562,6 +587,7 @@
 
       &.icon-tick.invalid:hover {
         cursor: default;
+
         svg {
           stroke: var(--icon-foreground);
         }
@@ -589,8 +615,10 @@
 
   &.editing {
     border: $s-1 solid var(--input-border-color-success);
+
     .annotation-title {
       border-bottom: $s-1 solid var(--entry-border-color-disabled);
+
       .icon {
         display: flex;
       }
@@ -603,9 +631,11 @@
 
   &.creating {
     border: $s-1 solid var(--input-border-color-success);
+
     .annotation-title .icon {
       display: flex;
     }
+
     textarea {
       min-height: $s-252;
     }
@@ -613,6 +643,7 @@
 
   .hidden {
     display: none;
+
     svg {
       display: none;
     }
@@ -650,7 +681,8 @@
       -moz-box-shadow: none;
       box-shadow: none;
 
-      resize: none; /*remove the resize handle on the bottom right*/
+      resize: none;
+      /*remove the resize handle on the bottom right*/
     }
 
     textarea,
@@ -665,4 +697,15 @@
       grid-area: 1 / 1 / 2 / 2;
     }
   }
+}
+
+.variation-property-container {
+  display: flex;
+  gap: $s-12;
+  width: 100%;
+  max-width: 100%;
+}
+
+.variation-property-value {
+  width: 100%;
 }

@@ -129,9 +129,10 @@
            (on-frame-leave (:id frame))))
 
         main-instance? (ctk/main-instance? frame)
+        is-variation?  (:is-variation frame)
 
         text-width (* (:width frame) zoom)
-        show-icon? (and (or (:use-for-thumbnail frame) grid-edition? main-instance?)
+        show-icon? (and (or (:use-for-thumbnail frame) grid-edition? main-instance? is-variation?)
                         (not (<= text-width 15)))
         text-pos-x (if show-icon? 15 0)
 
@@ -193,7 +194,8 @@
           (cond
             (:use-for-thumbnail frame) [:use {:href "#icon-boards-thumbnail"}]
             grid-edition? [:use {:href "#icon-grid"}]
-            main-instance? [:use {:href "#icon-component"}])])
+            main-instance? [:use {:href "#icon-component"}]
+            is-variation?  [:use {:href "#icon-component"}])])
 
        (if ^boolean edition?
            ;; Case when edition? is true
