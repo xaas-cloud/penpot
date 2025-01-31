@@ -85,20 +85,20 @@ fn cancel_animation_frame(frame_id: i32) {
 
 #[no_mangle]
 pub unsafe extern "C" fn render_2(_timestamp: f64) {
-    println!("render_2");
+    // println!("render_2");
     let state = unsafe { STATE.as_mut() }.expect("Got an invalid state pointer");
     if let Some(pending_render_id) = state.render_state.pending_render_id {
-        println!("------ {:?}", pending_render_id);
+        // println!("------ {:?}", pending_render_id);
         if let Some(frame_id) = state.render_state.render_frame_id {
-            println!("cancel {:?}", frame_id);
+            // println!("cancel {:?}", frame_id);
             cancel_animation_frame(frame_id);
         }
         state.render_state.init_render_time();
         state.render_all(true);
         state.render_state.render_frame_id = Some(start_animation_frame());
-        println!("frame_id {:?}", state.render_state.render_frame_id);
+        // println!("frame_id {:?}", state.render_state.render_frame_id);
     } else {
-        println!("finish render");
+        // println!("finish render - fkush");
         state.render_state.flush();
     }
 }
@@ -106,6 +106,7 @@ pub unsafe extern "C" fn render_2(_timestamp: f64) {
 #[no_mangle]
 pub unsafe extern "C" fn render_all_from_cache() {
     let state = unsafe { STATE.as_mut() }.expect("Got an invalid state pointer");
+    // println!("render_all_from_cache");
     state.render_state.render_all_from_cache();
 }
 
@@ -134,7 +135,7 @@ fn set_next(tree: &mut HashMap<Uuid, Shape>, root_id: Uuid) {
 
 #[no_mangle]
 pub unsafe extern "C" fn render(timestamp: f64) {
-    println!("render");
+    // println!("render");
     let state = unsafe { STATE.as_mut() }.expect("Got an invalid state pointer");
     state.render_state.init_pending_render_id();
     state.render_state.reset_canvas();

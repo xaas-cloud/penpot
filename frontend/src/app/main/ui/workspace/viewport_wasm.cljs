@@ -285,12 +285,7 @@
              (p/fmap (fn [ready?]
                        (when ready?
                          (reset! canvas-init? true)
-                         (wasm.api/assign-canvas canvas)
-
-                         (.addEventListener canvas "webglcontextlost"
-                                            (fn [event]
-                                              (.preventDefault event)
-                                              (.log js/console "¡Contexto WebGL perdido!")))))))
+                         (wasm.api/assign-canvas canvas)))))
         (fn []
           (wasm.api/clear-canvas))))
 

@@ -176,6 +176,7 @@ impl RenderState {
     }
 
     pub fn reset_canvas(&mut self) {
+        // println!("reset canvas");
         self.drawing_surface
             .canvas()
             .clear(self.background_color)
@@ -268,14 +269,14 @@ impl RenderState {
     }
 
     pub fn zoom(&mut self, tree: &mut HashMap<Uuid, Shape>) -> Result<(), String> {
-        if let Some(cached_surface_image) = self.cached_surface_image.as_mut() {
-            let is_dirty = cached_surface_image.is_dirty_for_zooming(&self.viewbox);
-            if is_dirty {
-                self.render_all(tree, true);
-            } else {
-                self.render_all_from_cache()?;
-            }
-        }
+        // if let Some(cached_surface_image) = self.cached_surface_image.as_mut() {
+        //     let is_dirty = cached_surface_image.is_dirty_for_zooming(&self.viewbox);
+        //     if is_dirty {
+        //         self.render_all(tree, true);
+        //     } else {
+        //         self.render_all_from_cache()?;
+        //     }
+        // }
 
         Ok(())
     }
@@ -313,12 +314,13 @@ impl RenderState {
             root_uuid = pending_render_id;
         }
 
-        self.render_shape_tree(&root_uuid, tree);
+        let is_complete = self.render_shape_tree(&root_uuid, tree);
         if generate_cached_surface_image || self.cached_surface_image.is_none() {
             self.cached_surface_image = Some(CachedSurfaceImage {
                 image: self.final_surface.image_snapshot(),
                 viewbox: self.viewbox,
-                has_all_shapes: true,
+                // has_all_shapes: is_complete,
+                has_all_shapes: false,
             });
         }
 
@@ -328,10 +330,12 @@ impl RenderState {
 
         debug::render_wasm_label(self);
 
-        self.flush();
+        // TODO: esto puede provocar perder shapes al hacer zoom
+        // self.flush();
     }
 
     pub fn render_all_from_cache(&mut self) -> Result<(), String> {
+        // println!("reset_canvas render_all_from_cache");
         self.reset_canvas();
 
         let cached = self
@@ -372,8 +376,24 @@ impl RenderState {
     }
 
     // Returns a boolean indicating if the viewbox contains the rendered shapes
-    fn render_shape_tree(&mut self, root_id: &Uuid, tree: &mut HashMap<Uuid, Shape>) {
+    fn render_shape_tree(&mut self, root_id: &Uuid, tree: &mut HashMap<Uuid, Shape>) -> bool {
         if let Some(element) = &mut tree.get_mut(&root_id) {
+            let mut is_complete = self.viewbox.area.contains(element.bounds());
+            if !root_id.is_nil() {
+                if !element.bounds().intersects(self.viewbox.area) || element.hidden() {
+                    // TODO: aquí el next debería de ser otra cosa porque podamos esta rama del árbol
+                    debug::render_debug_element(self, element, false);
+                    // TODO: This means that not all the shapes are rendered so we
+                    // need to call a render_all on the zoom out.
+                    // return is_complete; // TODO return is_complete or return false??
+                } else {
+                    debug::render_debug_element(self, element, true);
+                    // println!("RENDER SHAPE {:?}", root_id);
+                    self.render_shape(element, element.clip());
+                }
+            } else {
+                self.apply_drawing_to_final_canvas();
+            }
             // let mut paint = skia::Paint::default();
             // paint.set_blend_mode(element.blend_mode().into());
             // paint.set_alpha_f(element.opacity());
@@ -387,11 +407,6 @@ impl RenderState {
             // self.final_surface.canvas().save_layer(&layer_rec);
 
             // self.drawing_surface.canvas().save();
-            if !root_id.is_nil() {
-                self.render_shape(element, element.clip());
-            } else {
-                self.apply_drawing_to_final_canvas();
-            }
             // self.drawing_surface.canvas().restore();
 
             let duration = get_time() - self.render_time;
@@ -400,15 +415,17 @@ impl RenderState {
                     self.pending_render_id = Some(next);
                 } else {
                     // self.drawing_surface.canvas().save();
-                    self.render_shape_tree(&next, tree);
+                    is_complete = self.render_shape_tree(&next, tree) && is_complete;
                     // self.drawing_surface.canvas().restore();
                 }
             } else {
                 self.pending_render_id = None;
             }
             // self.final_surface.canvas().restore();
+            return is_complete;
         } else {
             eprintln!("Error: Element with root_id {root_id} not found in the tree.");
+            return false;
         }
     }
 }
