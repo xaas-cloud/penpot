@@ -207,14 +207,14 @@ impl RenderState {
             Some(&skia::Paint::default()),
         );
 
-        // self.shadow_surface.canvas().clear(skia::Color::TRANSPARENT);
+        self.shadow_surface.canvas().clear(skia::Color::TRANSPARENT);
 
-        // self.drawing_surface
-        //     .canvas()
-        //     .clear(skia::Color::TRANSPARENT);
+        self.drawing_surface
+            .canvas()
+            .clear(skia::Color::TRANSPARENT);
     }
 
-    pub fn render_shape(&mut self, shape: &mut Shape, clip: bool) {
+    pub fn render_shape(&mut self, shape: &mut Shape) {
         let transform = shape.transform.to_skia_matrix();
 
         // Check transform-matrix code from common/src/app/common/geom/shapes/transforms.cljc
@@ -254,12 +254,6 @@ impl RenderState {
                 }
             }
         };
-
-        if clip {
-            self.drawing_surface
-                .canvas()
-                .clip_rect(shape.bounds(), skia::ClipOp::Intersect, true);
-        }
 
         for shadow in shape.drop_shadows().rev().filter(|s| !s.hidden()) {
             shadows::render_drop_shadow(self, shadow, self.viewbox.zoom * self.options.dpr());
@@ -374,82 +368,70 @@ impl RenderState {
     fn render_shape_tree(&mut self, tree: &mut HashMap<Uuid, Shape>) -> bool {
         let mut duration = 0;
         while let Some(root_id) = self.pending_render_id {
+            // TODO
             if duration < 16 {
                 if let Some(element) = &mut tree.get_mut(&root_id) {
                     let mut is_complete = self.viewbox.area.contains(element.bounds());
-                    if let Some(relationship) = &element.relationship {
-                        if relationship == "down" {
-                            let mut paint = skia::Paint::default();
-                            paint.set_blend_mode(element.blend_mode().into());
-                            paint.set_alpha_f(element.opacity());
-                            let filter =
-                                element.image_filter(self.viewbox.zoom * self.options.dpr());
-                            if let Some(image_filter) = filter {
-                                paint.set_image_filter(image_filter);
-                            }
 
-                            let layer_rec = skia::canvas::SaveLayerRec::default().paint(&paint);
-                            // This is needed so the next non-children shape does not carry this shape's transform
-                            // println!("save final_surface layer");
-                            self.final_surface.canvas().save_layer(&layer_rec);
+                    let mut paint = skia::Paint::default();
+                    paint.set_blend_mode(element.blend_mode().into());
+                    paint.set_alpha_f(element.opacity());
+                    let filter = element.image_filter(self.viewbox.zoom * self.options.dpr());
+                    if let Some(image_filter) = filter {
+                        paint.set_image_filter(image_filter);
+                    }
+
+                    let layer_rec = skia::canvas::SaveLayerRec::default().paint(&paint);
+                    // This is needed so the next non-children shape does not carry this shape's transform
+                    self.final_surface.canvas().save_layer(&layer_rec);
+
+                    self.drawing_surface.canvas().save();
+                    if !root_id.is_nil() {
+                        // println!("{:?} render_shape element.clip() {:?}", root_id, element.clip());
+                        self.render_shape(&mut element.clone());
+                        if element.clip() {
+                            self.drawing_surface.canvas().clip_rect(
+                                element.bounds(),
+                                skia::ClipOp::Intersect,
+                                true,
+                            );
                         }
                     }
-                    if !root_id.is_nil() {
-                        if !element.bounds().intersects(self.viewbox.area) || element.hidden() {
-                            // TODO: aquí el next debería de ser otra cosa porque podamos esta rama del árbol
-                            debug::render_debug_element(self, element, false);
-                            // TODO: This means that not all the shapes are rendered so we
-                            // need to call a render_all on the zoom out.
-                            // return is_complete; // TODO return is_complete or return false??
-                        } else {
-                            debug::render_debug_element(self, element, true);
-                            // println!("RENDER SHAPE {:?}", root_id);.
-                            self.drawing_surface.canvas().save();
-                            self.render_shape(element, element.clip());
-                            self.drawing_surface.canvas().restore();
-                        }
-                    } else {
+                    else {
                         self.apply_drawing_to_final_canvas();
                     }
 
-                    let mut degree = 0;
-                    if let Some(relationship) = &element.relationship {
-                        if relationship == "up" {
-                            if let Some(degree) = element.degree {
-                                for _ in 0..degree {
-                                    // println!("restore final_surface layer");
-                                    self.final_surface.canvas().restore();
-                                }
-                            }
-                        }
+                    self.drawing_surface.canvas().restore();
+
+                    if element.children_ids().len() > 0 {
+                        self.drawing_surface.canvas().save();
+                    } else {
+                        self.final_surface.canvas().restore();
                     }
 
-                    // println!(
-                    //     "element {:?} {:?} {:?} {:?}",
-                    //     root_id, element.next, element.relationship, element.degree
-                    // );
-
+                    if element.relationship == "up" {
+                        for _ in 0..element.degree {
+                            self.drawing_surface.canvas().restore();
+                            self.final_surface.canvas().restore();
+                        }
+                    }
                     if let Some(next) = element.next {
-                        self.drawing_surface.canvas().save();
                         self.pending_render_id = Some(next);
                     } else {
                         self.pending_render_id = None;
+                        for _ in 0..element.depth {
+                            self.drawing_surface.canvas().restore();
+                            self.final_surface.canvas().restore();
+                        }
                     }
-
-                    if degree == 0 {
-                        // println!("restore drawing_surface");
-                        self.drawing_surface.canvas().restore();
-                    }
-
-                    self.final_surface.canvas().restore();
                 } else {
                     eprintln!("Error: Element with root_id {root_id} not found in the tree.");
                     return false;
                 }
                 duration = get_time() - self.render_time;
+                println!("duration {:?}", duration);
             } else {
                 break;
-                return false;
             }
         }
         return true;

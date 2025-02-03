@@ -155,9 +155,15 @@ fn set_next(tree: &mut HashMap<Uuid, Shape>, root_id: Uuid) {
             };
 
             if let Some(node) = tree.get_mut(&actual_id) {
-                node.relationship = Some(relationship.to_string());
-                node.degree = Some(degree);
+                node.relationship = relationship.to_string();
+                node.degree = degree;
             }
+        }
+    }
+    let actual_id = ordered_nodes[ordered_nodes.len() - 1];
+    if let Some(node) = tree.get_mut(&actual_id) {
+        if let Some(&depth_actual) = depth_map.get(&actual_id) {
+            node.depth = depth_actual;
         }
     }
 }
