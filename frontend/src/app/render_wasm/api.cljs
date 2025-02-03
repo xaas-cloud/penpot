@@ -7,6 +7,7 @@
 (ns app.render-wasm.api
   "A WASM based render API"
   (:require
+   [app.common.geom.matrix :as gmt]
    ["react-dom/server" :as rds]
    [app.common.data.macros :as dm]
    [app.common.math :as mth]
@@ -572,6 +573,86 @@
            (rx/mapcat identity)
            (rx/reduce conj [])
            (rx/subs! request-render)))))
+
+(def ENTRY_SIZE 40)
+
+(defn uuid->u8
+  [id]
+  (let [buffer (uuid/get-u32 id)
+        u32-arr (js/Uint32Array. 4)]
+    (doseq [i (range 0 4)]
+      (aset u32-arr i (aget buffer i)))
+    (js/Uint8Array. (.-buffer u32-arr))))
+
+(defn matrix->u8
+  [{:keys [a b c d e f]}]
+  (let [f32-arr (js/Float32Array. 6)]
+    (aset f32-arr 0 a)
+    (aset f32-arr 1 b)
+    (aset f32-arr 2 c)
+    (aset f32-arr 3 d)
+    (aset f32-arr 4 e)
+    (aset f32-arr 5 f)
+    (js/Uint8Array. (.-buffer f32-arr))))
+
+(defn data->entry
+  [data offset]
+
+  (let [id1 (.getUint32 data (+ offset 0) true)
+        id2 (.getUint32 data (+ offset 4) true)
+        id3 (.getUint32 data (+ offset 8) true)
+        id4 (.getUint32 data (+ offset 12) true)
+
+        a (.getFloat32 data (+ offset 16) true)
+        b (.getFloat32 data (+ offset 20) true)
+        c (.getFloat32 data (+ offset 24) true)
+        d (.getFloat32 data (+ offset 28) true)
+        e (.getFloat32 data (+ offset 32) true)
+        f (.getFloat32 data (+ offset 36) true)]
+
+    {:id (uuid/from-unsigned-parts id1 id2 id3 id4)
+     :transform (gmt/matrix a b c d e f)}))
+
+(defn propagate-modifiers
+  [id matrix]
+
+  (let [entries [{:id (uuid/next) :matrix matrix}
+                 {:id (uuid/next) :matrix matrix}
+                 {:id (uuid/next) :matrix matrix}]
+
+        ptr
+        (h/call internal-module "_alloc_bytes" (* ENTRY_SIZE (count entries)))
+
+        heap
+        (js/Uint8Array.
+         (.-buffer (gobj/get ^js internal-module "HEAPU8"))
+         ptr
+         (* ENTRY_SIZE (count entries)))]
+
+    (loop [entries (seq entries)
+           offset  0]
+      (when-not (empty? entries)
+        (let [{:keys [id matrix]} (first entries)]
+          (.set heap (uuid->u8 id) offset)
+          (.set heap (matrix->u8 matrix) (+ offset 16))
+          (recur (rest entries) (+ offset 40)))))
+
+    (let [result-ptr (h/call internal-module "_propagate_modifiers")
+
+          heap
+          (js/DataView. (.-buffer (gobj/get ^js internal-module "HEAPU8")))
+
+          len (.getUint32 heap result-ptr true)
+
+
+          result
+          (->> (range 0 len)
+               (map #(data->entry heap (+ result-ptr (+ 4 (* % 40))))))
+          ]
+
+      (.log js/console ">>" (clj->js result))
+      (h/call internal-module "_free_bytes")
+      )))
 
 (defn set-canvas-background
   [background]

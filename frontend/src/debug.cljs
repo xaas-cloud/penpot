@@ -6,6 +6,9 @@
 
 (ns debug
   (:require
+   [app.common.geom.matrix :as gmt]
+   [app.render-wasm.api :as api]
+   
    [app.common.data :as d]
    [app.common.data.macros :as dm]
    [app.common.files.repair :as cfr]
@@ -434,3 +437,7 @@
 (defn ^:export enable-text-v2
   []
   (st/emit! (features/enable-feature "text-editor/v2")))
+
+(defn ^:export ppp
+  []
+  (api/propagate-modifiers (uuid/next) (gmt/matrix 1 2 3 4 5 6)))

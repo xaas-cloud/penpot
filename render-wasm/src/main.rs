@@ -9,7 +9,7 @@ mod state;
 mod utils;
 mod view;
 
-use crate::shapes::{BoolType, Kind, Path};
+use crate::shapes::{BoolType, Kind, Path, TransformEntry, SerializableResult};
 
 use crate::state::State;
 use crate::utils::uuid_from_u32_quartet;
@@ -594,6 +594,42 @@ pub extern "C" fn set_shape_path_attrs(num_attrs: u32) {
             shape.set_path_attr(name, value);
         }
     }
+}
+
+/*
+   Returns an array in the heap. The first 4 bytes is always the size
+   of the array. Then the items are serialized one after the other
+   by the implementation of SerializableResult trait
+ */
+fn return_vec<T: SerializableResult>(result: Vec<T>) -> *mut u8 {
+    let elem_size = size_of::<T>();
+    let bytes_len = 4 + result.len() * elem_size;
+    let mut result_bytes = Vec::<u8>::with_capacity(bytes_len);
+
+    result_bytes.resize(bytes_len, 0);
+    result_bytes[0..4].clone_from_slice(&result.len().to_le_bytes());
+
+    for i in 0 .. result.len() {
+        let base = 4 + i * elem_size;
+        result[i].clone_to_slice(&mut result_bytes[base .. base + elem_size]);
+    }
+    mem::write_bytes(result_bytes)
+}
+
+#[no_mangle]
+pub extern "C" fn propagate_modifiers() -> *mut u8 {
+    let bytes = mem::bytes();
+
+    let entries: Vec<_> = bytes
+        .chunks(size_of::<TransformEntry>())
+        .map(|data| TransformEntry::from_bytes(data.try_into().unwrap()))
+        .collect();
+
+    // Example for the testing
+    println!(">propagate_modifiers: {entries:?}");
+    let result = entries.clone();
+
+    return_vec(result)
 }
 
 #[no_mangle]

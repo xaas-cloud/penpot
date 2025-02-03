@@ -67,4 +67,15 @@ impl Matrix {
     fn skew(&self) -> (f32, f32) {
         (self.c, self.b)
     }
+
+    pub fn as_bytes(&self) -> [u8; 24] {
+        let mut result = [0; 24];
+        result[0..4].clone_from_slice(&self.a.to_le_bytes());
+        result[4..8].clone_from_slice(&self.b.to_le_bytes());
+        result[8..12].clone_from_slice(&self.c.to_le_bytes());
+        result[12..16].clone_from_slice(&self.d.to_le_bytes());
+        result[16..20].clone_from_slice(&self.e.to_le_bytes());
+        result[20..24].clone_from_slice(&self.f.to_le_bytes());
+        result
+    }
 }

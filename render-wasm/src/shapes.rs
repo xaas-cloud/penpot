@@ -13,6 +13,7 @@ mod paths;
 mod shadows;
 mod strokes;
 mod svgraw;
+mod transform;
 
 pub use blurs::*;
 pub use bools::*;
@@ -22,6 +23,7 @@ pub use paths::*;
 pub use shadows::*;
 pub use strokes::*;
 pub use svgraw::*;
+pub use transform::*;
 
 pub type CornerRadius = skia::Point;
 pub type Corners = [CornerRadius; 4];

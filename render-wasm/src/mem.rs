@@ -14,7 +14,20 @@ pub extern "C" fn alloc_bytes(len: usize) -> *mut u8 {
     return ptr;
 }
 
-pub fn free_bytes() {
+pub fn write_bytes(bytes: Vec<u8>) -> *mut u8 {
+    if unsafe { BUFFERU8.is_some() } {
+        panic!("Bytes already allocated");
+    }
+
+    let mut buffer = Box::new(bytes);
+    let ptr = buffer.as_mut_ptr();
+
+    unsafe { BUFFERU8 = Some(buffer) };
+    return ptr;
+}
+
+#[no_mangle]
+pub extern "C" fn free_bytes() {
     if unsafe { BUFFERU8.is_some() } {
         let buffer = unsafe { BUFFERU8.take() }.expect("uninitialized buffer");
         std::mem::drop(buffer);
