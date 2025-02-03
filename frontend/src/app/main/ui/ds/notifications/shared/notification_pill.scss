@@ -1,0 +1,45 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+//
+// Copyright (c) KALEIDOS INC
+
+@use "../_sizes.scss" as *;
+@use "../_borders.scss" as *;
+@use "../typography.scss" as *;
+
+.notification-pill {
+  @include use-typography("body-medium");
+
+  --notification-fg-color: var(--color-foreground-primary);
+  --notification-icon-color: var(--color-foreground-secondary);
+  --notification-icon-margin: var(--sp-xxs);
+
+  display: inline-grid;
+  grid-template-columns: auto 1fr auto;
+  column-gap: var(--sp-s);
+  align-items: flex-start;
+
+  color: var(--notification-fg-color);
+}
+
+.level-info {
+  --notification-icon-color: var(--color-accent-info);
+}
+
+.level-error {
+  --notification-icon-color: var(--color-accent-error);
+}
+
+.level-warning {
+  --notification-icon-color: var(--color-accent-warning);
+}
+
+.level-success {
+  --notification-icon-color: var(--color-accent-success);
+}
+
+.icon {
+  color: var(--toast-icon-color);
+  margin-block-start: var(--notification-icon-margin);
+}

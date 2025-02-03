@@ -10,6 +10,7 @@
    [app.main.style :as stl])
   (:require
    [app.main.ui.ds.foundations.assets.icon :as i]
+   [app.main.ui.ds.notifications.shared.notification-pill :refer [notification-pill*]]
    [rumext.v2 :as mf]))
 
 (def ^:private icons-by-level
@@ -35,8 +36,10 @@
                                     :toast-error (= level "error")
                                     :toast-success (= level "success")) " " class)
         icon-id (or (get icons-by-level level) i/msg-neutral)
-        props (mf/spread-props props {:class class})]
-    [:> "aside" props
+        props (mf/spread-props props {:class class :icon-id icon-id})]
+    [:> notification-pill* props children]
+    [:> "button" {:on-click on-close :aria-label "Close" :class (stl/css :close-button)} [:> i/icon* {:icon-id i/close}]]
+    #_[:> "aside" props
      [:*
       [:> i/icon* {:icon-id icon-id :class (stl/css :icon)}]
       children
