@@ -347,14 +347,14 @@ impl RenderState {
                 if !visited_children {
                     // let mut is_complete = self.viewbox.area.contains(element.bounds());
 
-                    if !node_id.is_nil() {
-                        if !element.bounds().intersects(self.viewbox.area) || element.hidden() {
-                            debug::render_debug_element(self, element, false);
-                            continue;
-                        } else {
-                            debug::render_debug_element(self, element, true);
-                        }
-                    }
+                    // if !node_id.is_nil() {
+                    //     if !element.bounds().intersects(self.viewbox.area) || element.hidden() {
+                    //         debug::render_debug_element(self, element, false);
+                    //         continue;
+                    //     } else {
+                    //         debug::render_debug_element(self, element, true);
+                    //     }
+                    // }
 
                     let mut paint = skia::Paint::default();
                     paint.set_blend_mode(element.blend_mode().into());
