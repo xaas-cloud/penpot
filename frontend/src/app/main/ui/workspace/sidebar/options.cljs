@@ -47,7 +47,7 @@
   [{:keys [shape shapes-with-children page-id file-id shared-libs] :as props}]
   (let [shape-type  (dm/get-prop shape :type)
         shape-id    (dm/get-prop shape :id)
-        is-variation? (dm/get-prop shape :is-variation)
+        is-variation? (dm/get-prop shape :is-variation-container)
 
         modifiers   (mf/deref refs/workspace-modifiers)
         modifiers   (dm/get-in modifiers [shape-id :modifiers])
@@ -66,13 +66,13 @@
        :svg-raw [:& svg-raw/options {:shape shape}]
        :bool    [:& bool/options {:shape shape}]
        nil)
-     (when-not is-variation?
-       [:& exports-menu
-        {:ids [(:id shape)]
-         :values (select-keys shape [:exports])
-         :shape shape
-         :page-id page-id
-         :file-id file-id}])]))
+
+     [:& exports-menu
+      {:ids [(:id shape)]
+       :values (select-keys shape [:exports])
+       :shape shape
+       :page-id page-id
+       :file-id file-id}]]))
 
 (mf/defc specialized-panel
   {::mf/wrap [mf/memo]}

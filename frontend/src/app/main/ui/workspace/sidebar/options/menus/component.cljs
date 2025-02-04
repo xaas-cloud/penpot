@@ -24,6 +24,8 @@
    [app.main.ui.components.select :refer [select]]
    [app.main.ui.components.title-bar :refer [title-bar]]
    [app.main.ui.context :as ctx]
+   [app.main.ui.ds.buttons.icon-button :refer [icon-button*]]
+   [app.main.ui.ds.controls.input :refer [input*]]
    [app.main.ui.hooks :as h]
    [app.main.ui.icons :as i]
    [app.main.ui.workspace.sidebar.assets.common :as cmm]
@@ -228,7 +230,7 @@
           [:div {:class (stl/css  :counter)} (str size "/300")])]])))
 
 
-(mf/defc component-variation*
+#_(mf/defc component-variation*
   {::mf/props :obj}
   [{:keys [component shape libraries]}]
   (let [properties (:variation-properties component)
@@ -251,9 +253,9 @@
 
         handle-change (mf/use-fn
                        (mf/deps component)
-                       (fn [key event]
+                       (fn [pos event]
                          (let [value (dom/get-target-val event)]
-                           (st/emit! (dwv/update-property-value (:id component) key value)))))
+                           (st/emit! (dwv/update-property-value (:id component) pos value)))))
         handle-key-down
         (mf/use-fn
          (fn [event]
@@ -706,7 +708,8 @@
           (when (and (not swap-opened?) (not multi))
             [:& component-annotation {:id id :shape shape :component component :rerender-fn rerender-fn}]
             (when is-variation?
-              [:> component-variation* {:component component :shape shape :libraries libraries}]))
+              [:div "VARIATION"]
+              #_[:> component-variation* {:component component :shape shape :libraries libraries}]))
 
 
 
@@ -714,6 +717,48 @@
           (when (dbg/enabled? :display-touched)
             [:div ":touched " (str (:touched shape))])])])))
 
+(mf/defc input-with-values*
+  {::mf/props :obj}
+  [{:keys [name value on-change]}]
+  (let [editing*  (mf/use-state false)
+        editing?  (deref editing*)
+        input-ref (mf/use-ref)
+        input     (mf/ref-val input-ref)
+        on-edit
+        (mf/use-fn
+         (fn [event]
+           (dom/stop-propagation event)
+           (reset! editing* true)
+           (dom/focus! input)))
+        on-blur
+        (mf/use-fn
+         (fn [event]
+           (let [new-name (dom/get-target-val event)]
+             (dom/stop-propagation event)
+             (reset! editing* false)
+             (on-change new-name))))
+
+        handle-key-down
+        (mf/use-fn
+         (fn [event]
+           (let [enter? (kbd/enter? event)
+                 esc?   (kbd/esc? event)
+                 node   (dom/get-target event)]
+             (when ^boolean enter? (dom/blur! node))
+             (when ^boolean esc? (dom/blur! node)))))]
+    [:div {:class (stl/css :variation-property-container)}
+     (if editing?
+       [:> input*
+        {:ref input-ref
+         :class (stl/css :name-input)
+         :variant "seamless"
+         :default-value name
+         :auto-focus true
+         :on-blur on-blur
+         :on-key-down handle-key-down}]
+       [:*
+        [:div {:class (stl/css :variation-property-name) :title name :on-click on-edit}  name]
+        [:div {:class (stl/css :variation-property-value) :title value} value]])]))
 
 (mf/defc variation-menu
   {::mf/props :obj}
@@ -737,28 +782,24 @@
 
 
 
+
+
         component-id        (:component-id first-variation)
 
         component           (ctf/get-component libraries current-file-id component-id) ;;todo include-deleted?
-        variation-id (:variation-id component)
+        variation-id        (:variation-id component)
 
         related-components (->> data
                                 :components
                                 vals
                                 (filter #(= (:variation-id %) variation-id)))
 
-        properties (reduce
-                    (fn [acc {:keys [variation-properties]}]
-                      (reduce
-                       (fn [acc [prop val]]
-                         (update acc prop conj val))
-                       acc
-                       variation-properties))
-                    {}
-                    related-components)
 
-        _ (prn (:component-file shape))
-        _ (prn properties)
+        properties (->> related-components
+                        (mapcat :variation-properties)        ;; Flatten all variation-properties from all maps
+                        (group-by :name)                      ;; Group by :name
+                        (map (fn [[k v]] {:name k :values (map :value v)}))) ;; Transform into desired structure
+
 
         state*              (mf/use-state
                              #(do {:show-content true
@@ -777,7 +818,13 @@
 
         on-menu-close
         (mf/use-fn
-         #(swap! state* assoc :menu-open false))]
+         #(swap! state* assoc :menu-open false))
+
+        update-property-name
+        (mf/use-fn
+         (mf/deps variation-id)
+         (fn [pos new-name]
+           (st/emit! (dwv/update-property-name variation-id pos new-name))))]
     (when (seq shapes)
       [:div {:class (stl/css :element-set)}
        [:div {:class (stl/css :element-title)}
@@ -819,12 +866,20 @@
                                     :menu-entries menu-entries
                                     :main-instance true}]])]
         [:*
-         (for [[key value] properties]
-           [:div {:key (str (:id component) key) :class (stl/css :variation-property-container)}
+         (for [[pos property] (map vector (range) properties)]
+           (let [val (str/join ", " (:values property))]
+             [:div {:class (stl/css :variation-property-row)}
+              [:> input-with-values* {:name (:name property) :value val :on-change (partial update-property-name pos)}]
+              [:> icon-button* {:variant "ghost"
+                                :aria-label (tr "settings.remove-color")
+                                :on-click identity
+                                :icon "remove"}]])
 
-            [:span (str (name key) ": ")]
-            [:span (str/join ", " (sort value))]])]
-        ]
 
+           #_[:div {:class (stl/css :element-content)}
+              [:div {:class (stl/css :component-wrapper :without-actions)}
+               [:div {:class (stl/css :component-name-wrapper)}
+           ;;[:div {:key (str (:id component) key) :class (stl/css :variation-property-container)}
 
-       ])))
+                [:span (str (name key) ": ")]
+                [:span (str/join ", " (sort value))]]]])]]])))

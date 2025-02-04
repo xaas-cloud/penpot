@@ -4,6 +4,7 @@
 //
 // Copyright (c) KALEIDOS INC
 
+@use "../../../../ds/typography.scss" as t;
 @import "refactor/common-refactor.scss";
 
 .element-set {
@@ -699,13 +700,45 @@
   }
 }
 
+
+.variation-property-row {
+  @include flexRow;
+  justify-content: space-between;
+  width: 100%;
+  margin-block-start: $s-12;
+}
+
 .variation-property-container {
+  @include t.use-typography("body-small");
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: $s-8;
+
+  border-radius: $br-8;
+  background-color: var(--assets-item-background-color);
+  padding: $s-8;
+  width: 100%;
+}
+
+
+.variation-property-name {
+  color: var(--color-foreground-primary);
+}
+
+.variation-property-value {
+  @include textEllipsis;
+  color: var(--color-foreground-secondary);
+}
+
+/*
+.variation-property-container2 {
   display: flex;
   gap: $s-12;
   width: 100%;
   max-width: 100%;
+
 }
 
 .variation-property-value {
   width: 100%;
-}
+}*/

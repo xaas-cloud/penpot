@@ -129,7 +129,7 @@
            (on-frame-leave (:id frame))))
 
         main-instance? (ctk/main-instance? frame)
-        is-variation?  (:is-variation frame)
+        is-variation?  (:is-variation-container frame)
 
         text-width (* (:width frame) zoom)
         show-icon? (and (or (:use-for-thumbnail frame) grid-edition? main-instance? is-variation?)
