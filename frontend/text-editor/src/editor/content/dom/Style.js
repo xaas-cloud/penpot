@@ -116,6 +116,7 @@ export function getComputedStyle(element) {
     }
     currentElement = currentElement.parentElement;
   }
+  console.log(inertElement.style.getPropertyValue("font-family"));
   return inertElement.style;
 }
 
