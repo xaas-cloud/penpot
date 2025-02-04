@@ -1,5 +1,4 @@
 use skia_safe as skia;
-use std::collections::HashMap;
 use uuid::Uuid;
 
 mod debug;
@@ -11,7 +10,7 @@ mod state;
 mod utils;
 mod view;
 
-use crate::shapes::{BoolType, Kind, Path, Shape};
+use crate::shapes::{BoolType, Kind, Path};
 
 use crate::state::State;
 use crate::utils::uuid_from_u32_quartet;
@@ -71,7 +70,8 @@ extern "C" {
 }
 
 fn start_animation_frame() -> i32 {
-    let script = std::ffi::CString::new("requestAnimationFrame(_render_2)").unwrap();
+    let script =
+        std::ffi::CString::new("requestAnimationFrame(_render_request_animation_frame)").unwrap();
     unsafe { emscripten_run_script_int(script.as_ptr()) }
 }
 
@@ -84,21 +84,16 @@ fn cancel_animation_frame(frame_id: i32) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn render_2(_timestamp: f64) {
-    // println!("render_2");
+pub unsafe extern "C" fn render_request_animation_frame(_timestamp: f64) {
     let state = unsafe { STATE.as_mut() }.expect("Got an invalid state pointer");
-    if let Some(pending_render_id) = state.render_state.pending_render_id {
-        // println!("------ {:?}", pending_render_id);
+    if state.render_state.is_running {
         if let Some(frame_id) = state.render_state.render_frame_id {
-            // println!("cancel {:?}", frame_id);
             cancel_animation_frame(frame_id);
         }
         state.render_state.init_render_time();
         state.render_all(true);
         state.render_state.render_frame_id = Some(start_animation_frame());
-        // println!("frame_id {:?}", state.render_state.render_frame_id);
     } else {
-        // println!("finish render - fkush");
         state.render_state.flush();
     }
 }
@@ -106,96 +101,15 @@ pub unsafe extern "C" fn render_2(_timestamp: f64) {
 #[no_mangle]
 pub unsafe extern "C" fn render_all_from_cache() {
     let state = unsafe { STATE.as_mut() }.expect("Got an invalid state pointer");
-    // println!("render_all_from_cache");
     if let Some(frame_id) = state.render_state.render_frame_id {
-        // println!("cancel {:?}", frame_id);
         cancel_animation_frame(frame_id);
     }
-    state.render_state.render_all_from_cache();
+    let _ = state.render_state.render_all_from_cache();
 }
-
-fn set_next(tree: &mut HashMap<Uuid, Shape>, root_id: Uuid) {
-    let mut ordered_nodes = Vec::new();
-    let mut depth_map = HashMap::new();
-
-    fn preorder(
-        tree: &HashMap<Uuid, Shape>,
-        node_id: Uuid,
-        order: &mut Vec<Uuid>,
-        depth_map: &mut HashMap<Uuid, u32>,
-        depth: u32,
-    ) {
-        order.push(node_id);
-        depth_map.insert(node_id, depth);
-        if let Some(node) = tree.get(&node_id) {
-            for &child_id in &node.children_ids() {
-                preorder(tree, child_id, order, depth_map, depth + 1);
-            }
-        }
-    }
-
-    preorder(tree, root_id, &mut ordered_nodes, &mut depth_map, 0);
-
-    for i in 0..ordered_nodes.len() - 1 {
-        let actual_id = ordered_nodes[i];
-        let next_id = ordered_nodes[i + 1];
-
-        if let Some(node) = tree.get_mut(&actual_id) {
-            node.next = Some(next_id);
-        }
-
-        if let (Some(&depth_actual), Some(&depth_next)) =
-            (depth_map.get(&actual_id), depth_map.get(&next_id))
-        {
-            let degree = (depth_next as i32 - depth_actual as i32).abs() as u32;
-            let relationship = if depth_next > depth_actual {
-                "down"
-            } else {
-                "up"
-            };
-
-            if let Some(node) = tree.get_mut(&actual_id) {
-                node.relationship = relationship.to_string();
-                node.degree = degree;
-            }
-        }
-    }
-    let actual_id = ordered_nodes[ordered_nodes.len() - 1];
-    if let Some(node) = tree.get_mut(&actual_id) {
-        if let Some(&depth_actual) = depth_map.get(&actual_id) {
-            node.depth = depth_actual;
-        }
-    }
-}
-
-// fn set_next(tree: &mut HashMap<Uuid, Shape>, root_id: Uuid) {
-//     let mut ordered_nodes = Vec::new();
-
-//     fn preorder(tree: &mut HashMap<Uuid, Shape>, node_id: Uuid, order: &mut Vec<Uuid>) {
-//         order.push(node_id);
-//         if let Some(node) = tree.get(&node_id) {
-//             for &child_id in &node.children_ids() {
-//                 preorder(tree, child_id, order);
-//             }
-//         }
-//     }
-
-//     preorder(tree, root_id, &mut ordered_nodes);
-
-//     for i in 0..ordered_nodes.len() - 1 {
-//         let actual_id = ordered_nodes[i];
-//         let nex_id = ordered_nodes[i + 1];
-//         if let Some(node) = tree.get_mut(&actual_id) {
-//             node.next = Some(nex_id);
-//         }
-//     }
-// }
 
 #[no_mangle]
 pub unsafe extern "C" fn render(timestamp: f64) {
-    // println!("render");
     let state = unsafe { STATE.as_mut() }.expect("Got an invalid state pointer");
-    state.render_state.init_pending_render_id();
     state.render_state.reset_canvas();
 
     state.render_state.scale(
@@ -207,27 +121,15 @@ pub unsafe extern "C" fn render(timestamp: f64) {
         state.render_state.viewbox.pan_y,
     );
 
-    set_next(&mut state.shapes, Uuid::nil());
-    render_2(timestamp);
+    state.render_state.start_rendering(Uuid::nil());
+
+    render_request_animation_frame(timestamp);
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn render_without_cache() {
     let state = unsafe { STATE.as_mut() }.expect("Got an invalid state pointer");
     state.render_all(false);
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn zoom() {
-    let state: &mut Box<State<'_>> =
-        unsafe { STATE.as_mut() }.expect("got an invalid state pointer");
-    state.zoom();
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn pan() {
-    let state = unsafe { STATE.as_mut() }.expect("got an invalid state pointer");
-    state.pan();
 }
 
 #[no_mangle]

@@ -36,16 +36,6 @@ impl<'a> State<'a> {
         &mut self.render_state
     }
 
-    pub fn pan(&mut self) {
-        // TODO: propagate error to main fn
-        let _ = self.render_state.pan(&mut self.shapes).unwrap();
-    }
-
-    pub fn zoom(&mut self) {
-        // TODO: propagate error to main fn
-        let _ = self.render_state.zoom(&mut self.shapes).unwrap();
-    }
-
     pub fn render_all(&mut self, generate_cached_surface_image: bool) {
         self.render_state
             .render_all(&mut self.shapes, generate_cached_surface_image);

@@ -1,4 +1,3 @@
-use skia::Contains;
 use skia_safe as skia;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -27,7 +26,6 @@ const DEFAULT_FONT_BYTES: &[u8] =
     include_bytes!("../../frontend/resources/fonts/RobotoMono-Regular.ttf");
 extern "C" {
     fn emscripten_run_script_int(script: *const i8) -> i32;
-    fn emscripten_run_script(script: *const i8);
 }
 
 fn get_time() -> i32 {
@@ -52,8 +50,9 @@ pub(crate) struct RenderState {
     pub images: ImageStore,
     pub background_color: skia::Color,
     pub render_time: i32,
-    pub pending_render_id: Option<Uuid>,
     pub render_frame_id: Option<i32>,
+    pub is_running: bool,
+    pub stack: Vec<(Uuid, bool)>,
 }
 
 impl RenderState {
@@ -90,17 +89,14 @@ impl RenderState {
             images: ImageStore::new(),
             background_color: skia::Color::TRANSPARENT,
             render_time: get_time(),
-            pending_render_id: None,
             render_frame_id: None,
+            is_running: false,
+            stack: vec![],
         }
     }
 
     pub fn init_render_time(&mut self) {
         self.render_time = get_time();
-    }
-
-    pub fn init_pending_render_id(&mut self) {
-        self.pending_render_id = Some(Uuid::nil());
     }
 
     pub fn add_font(&mut self, family_name: String, font_data: &[u8]) -> Result<(), String> {
@@ -207,14 +203,14 @@ impl RenderState {
             Some(&skia::Paint::default()),
         );
 
-        self.shadow_surface.canvas().clear(skia::Color::TRANSPARENT);
+        // self.shadow_surface.canvas().clear(skia::Color::TRANSPARENT);
 
-        self.drawing_surface
-            .canvas()
-            .clear(skia::Color::TRANSPARENT);
+        // self.drawing_surface
+        //     .canvas()
+        //     .clear(skia::Color::TRANSPARENT);
     }
 
-    pub fn render_shape(&mut self, shape: &mut Shape) {
+    pub fn render_shape(&mut self, shape: &mut Shape, clip: bool) {
         let transform = shape.transform.to_skia_matrix();
 
         // Check transform-matrix code from common/src/app/common/geom/shapes/transforms.cljc
@@ -255,47 +251,17 @@ impl RenderState {
             }
         };
 
+        if clip {
+            self.drawing_surface
+                .canvas()
+                .clip_rect(shape.bounds(), skia::ClipOp::Intersect, true);
+        }
+
         for shadow in shape.drop_shadows().rev().filter(|s| !s.hidden()) {
             shadows::render_drop_shadow(self, shadow, self.viewbox.zoom * self.options.dpr());
         }
 
         self.apply_drawing_to_final_canvas();
-    }
-
-    pub fn zoom(&mut self, tree: &mut HashMap<Uuid, Shape>) -> Result<(), String> {
-        // if let Some(cached_surface_image) = self.cached_surface_image.as_mut() {
-        //     let is_dirty = cached_surface_image.is_dirty_for_zooming(&self.viewbox);
-        //     if is_dirty {
-        //         self.render_all(tree, true);
-        //     } else {
-        //         self.render_all_from_cache()?;
-        //     }
-        // }
-
-        Ok(())
-    }
-
-    pub fn pan(&mut self, tree: &mut HashMap<Uuid, Shape>) -> Result<(), String> {
-        // self.scale(
-        //     self.viewbox.zoom * self.options.dpr(),
-        //     self.viewbox.zoom * self.options.dpr(),
-        // );
-        // self.translate(self.viewbox.pan_x, self.viewbox.pan_y);
-        // self.init_pending_render_id();
-
-        // if let Some(cached_surface_image) = self.cached_surface_image.as_mut() {
-        //     let is_dirty = cached_surface_image.is_dirty_for_panning(&self.viewbox);
-        //     if is_dirty {
-        //         self.render_all(tree, true);
-        //     } else {
-        //         self.render_all_from_cache()?;
-        //     }
-        // }
-        // self.render_all_from_cache()?;
-        // let script = std::ffi::CString::new("requestAnimationFrame(_render)").unwrap();
-        // unsafe { emscripten_run_script(script.as_ptr()) }
-
-        Ok(())
     }
 
     pub fn render_all(
@@ -308,8 +274,7 @@ impl RenderState {
             self.cached_surface_image = Some(CachedSurfaceImage {
                 image: self.final_surface.image_snapshot(),
                 viewbox: self.viewbox,
-                // has_all_shapes: is_complete,
-                has_all_shapes: false,
+                has_all_shapes: is_complete,
             });
         }
 
@@ -324,7 +289,6 @@ impl RenderState {
     }
 
     pub fn render_all_from_cache(&mut self) -> Result<(), String> {
-        // println!("reset_canvas render_all_from_cache");
         self.reset_canvas();
 
         let cached = self
@@ -364,76 +328,81 @@ impl RenderState {
         debug::render(self);
     }
 
-    // Returns a boolean indicating if the viewbox contains the rendered shapes
-    fn render_shape_tree(&mut self, tree: &mut HashMap<Uuid, Shape>) -> bool {
-        let mut duration = 0;
-        while let Some(root_id) = self.pending_render_id {
-            // TODO
-            if duration < 16 {
-                if let Some(element) = &mut tree.get_mut(&root_id) {
-                    let mut is_complete = self.viewbox.area.contains(element.bounds());
+    pub fn start_rendering(&mut self, root_id: Uuid) {
+        self.stack = vec![(root_id, false)];
+        self.render_time = get_time();
+        self.is_running = true;
+    }
 
-                    let mut paint = skia::Paint::default();
-                    paint.set_blend_mode(element.blend_mode().into());
-                    paint.set_alpha_f(element.opacity());
-                    let filter = element.image_filter(self.viewbox.zoom * self.options.dpr());
-                    if let Some(image_filter) = filter {
-                        paint.set_image_filter(image_filter);
+    pub fn render_shape_tree(&mut self, tree: &HashMap<Uuid, Shape>) -> bool {
+        // TODO
+        let is_complete = false;
+        if !self.is_running {
+            return false;
+        }
+
+        let mut duration = 0;
+        while let Some((node_id, visited_children)) = self.stack.pop() {
+            // println!("Duration {:?}", duration);
+            if duration > 16 {
+                return false;
+            }
+
+            if let Some(element) = tree.get(&node_id) {
+                if !visited_children {
+                    // let mut is_complete = self.viewbox.area.contains(element.bounds());
+
+                    if !node_id.is_nil() {
+                        if !element.bounds().intersects(self.viewbox.area) || element.hidden() {
+                            debug::render_debug_element(self, element, false);
+                            continue;
+                        } else {
+                            debug::render_debug_element(self, element, true);
+                        }
                     }
 
-                    let layer_rec = skia::canvas::SaveLayerRec::default().paint(&paint);
-                    // This is needed so the next non-children shape does not carry this shape's transform
-                    self.final_surface.canvas().save_layer(&layer_rec);
+                    // let mut paint = skia::Paint::default();
+                    // paint.set_blend_mode(element.blend_mode().into());
+                    // paint.set_alpha_f(element.opacity());
+
+                    // if let Some(image_filter) =
+                    //     element.image_filter(self.viewbox.zoom * self.options.dpr())
+                    // {
+                    //     paint.set_image_filter(image_filter);
+                    // }
+
+                    // let layer_rec = skia::canvas::SaveLayerRec::default().paint(&paint);
+                    // self.final_surface.canvas().save_layer(&layer_rec);
 
                     self.drawing_surface.canvas().save();
-                    if !root_id.is_nil() {
-                        // println!("{:?} render_shape element.clip() {:?}", root_id, element.clip());
-                        self.render_shape(&mut element.clone());
-                        if element.clip() {
-                            self.drawing_surface.canvas().clip_rect(
-                                element.bounds(),
-                                skia::ClipOp::Intersect,
-                                true,
-                            );
-                        }
-                    }
-                    else {
+                    if !node_id.is_nil() {
+                        self.render_shape(&mut element.clone(), element.clip());
+                    } else {
                         self.apply_drawing_to_final_canvas();
                     }
-
                     self.drawing_surface.canvas().restore();
 
-                    if element.children_ids().len() > 0 {
-                        self.drawing_surface.canvas().save();
-                    } else {
-                        self.final_surface.canvas().restore();
-                    }
+                    // Marcar el nodo como "visitado" antes de procesar los hijos
+                    self.stack.push((node_id, true));
 
-                    if element.relationship == "up" {
-                        for _ in 0..element.degree {
-                            self.drawing_surface.canvas().restore();
-                            self.final_surface.canvas().restore();
-                        }
-                    }
-                    if let Some(next) = element.next {
-                        self.pending_render_id = Some(next);
-                    } else {
-                        self.pending_render_id = None;
-                        for _ in 0..element.depth {
-                            self.drawing_surface.canvas().restore();
-                            self.final_surface.canvas().restore();
+                    // Agregar los hijos a la pila
+                    if element.is_recursive() {
+                        for child_id in element.children_ids().iter().rev() {
+                            self.stack.push((*child_id, false));
                         }
                     }
                 } else {
-                    eprintln!("Error: Element with root_id {root_id} not found in the tree.");
-                    return false;
+                    // self.final_surface.canvas().restore();
                 }
-                duration = get_time() - self.render_time;
-                println!("duration {:?}", duration);
             } else {
-                break;
+                eprintln!("Error: Element with root_id {node_id} not found in the tree.");
+                // return false;
             }
+            duration = get_time() - self.render_time;
         }
-        return true;
+
+        // Si terminamos de procesar todos los nodos, marcamos la renderización como completa
+        self.is_running = false;
+        return is_complete;
     }
 }
