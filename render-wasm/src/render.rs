@@ -95,10 +95,6 @@ impl RenderState {
         }
     }
 
-    pub fn init_render_time(&mut self) {
-        self.render_time = get_time();
-    }
-
     pub fn add_font(&mut self, family_name: String, font_data: &[u8]) -> Result<(), String> {
         let typeface = skia::FontMgr::default()
             .new_from_data(font_data, None)
@@ -203,11 +199,11 @@ impl RenderState {
             Some(&skia::Paint::default()),
         );
 
-        // self.shadow_surface.canvas().clear(skia::Color::TRANSPARENT);
+        self.shadow_surface.canvas().clear(skia::Color::TRANSPARENT);
 
-        // self.drawing_surface
-        //     .canvas()
-        //     .clear(skia::Color::TRANSPARENT);
+        self.drawing_surface
+            .canvas()
+            .clear(skia::Color::TRANSPARENT);
     }
 
     pub fn render_shape(&mut self, shape: &mut Shape, clip: bool) {
@@ -269,6 +265,7 @@ impl RenderState {
         tree: &mut HashMap<Uuid, Shape>,
         generate_cached_surface_image: bool,
     ) {
+        self.render_time = get_time();
         let is_complete = self.render_shape_tree(tree);
         if generate_cached_surface_image || self.cached_surface_image.is_none() {
             self.cached_surface_image = Some(CachedSurfaceImage {
@@ -284,8 +281,7 @@ impl RenderState {
 
         debug::render_wasm_label(self);
 
-        // TODO: esto puede provocar perder shapes al hacer zoom
-        // self.flush();
+        self.flush();
     }
 
     pub fn render_all_from_cache(&mut self) -> Result<(), String> {
@@ -342,11 +338,10 @@ impl RenderState {
         }
 
         let mut duration = 0;
+        // println!("---->render_shape_tree stack {:?}", self.stack);
         while let Some((node_id, visited_children)) = self.stack.pop() {
             // println!("Duration {:?}", duration);
-            if duration > 16 {
-                return false;
-            }
+            // println!("---->stack {:?}", self.stack);
 
             if let Some(element) = tree.get(&node_id) {
                 if !visited_children {
@@ -361,44 +356,55 @@ impl RenderState {
                         }
                     }
 
-                    // let mut paint = skia::Paint::default();
-                    // paint.set_blend_mode(element.blend_mode().into());
-                    // paint.set_alpha_f(element.opacity());
+                    let mut paint = skia::Paint::default();
+                    paint.set_blend_mode(element.blend_mode().into());
+                    paint.set_alpha_f(element.opacity());
 
-                    // if let Some(image_filter) =
-                    //     element.image_filter(self.viewbox.zoom * self.options.dpr())
-                    // {
-                    //     paint.set_image_filter(image_filter);
-                    // }
+                    if let Some(image_filter) =
+                        element.image_filter(self.viewbox.zoom * self.options.dpr())
+                    {
+                        paint.set_image_filter(image_filter);
+                    }
 
-                    // let layer_rec = skia::canvas::SaveLayerRec::default().paint(&paint);
-                    // self.final_surface.canvas().save_layer(&layer_rec);
+                    let layer_rec = skia::canvas::SaveLayerRec::default().paint(&paint);
+                    // println!("{node_id} self.final_surface.canvas().save_layer(&layer_rec)");
+                    self.final_surface.canvas().save_layer(&layer_rec);
 
+                    // println!("{node_id} self.drawing_surface.canvas().save()");
                     self.drawing_surface.canvas().save();
                     if !node_id.is_nil() {
+                        // println!("{node_id} self.render_shape(&mut element.clone(), element.clip())");
                         self.render_shape(&mut element.clone(), element.clip());
                     } else {
+                        // println!("{node_id} self.apply_drawing_to_final_canvas()");
                         self.apply_drawing_to_final_canvas();
                     }
+                    // println!("{node_id} self.drawing_surface.canvas().restore()");
                     self.drawing_surface.canvas().restore();
 
                     // Marcar el nodo como "visitado" antes de procesar los hijos
                     self.stack.push((node_id, true));
+                    // println!("---->stack 2 {:?}", self.stack);
 
                     // Agregar los hijos a la pila
                     if element.is_recursive() {
                         for child_id in element.children_ids().iter().rev() {
                             self.stack.push((*child_id, false));
+                            // println!("---->stack 3 {:?}", self.stack);
                         }
                     }
                 } else {
-                    // self.final_surface.canvas().restore();
+                    // println!("{node_id} self.final_surface.canvas().restore()");
+                    self.final_surface.canvas().restore();
                 }
             } else {
                 eprintln!("Error: Element with root_id {node_id} not found in the tree.");
                 // return false;
             }
             duration = get_time() - self.render_time;
+            if duration > 16 {
+                return false;
+            }
         }
 
         // Si terminamos de procesar todos los nodos, marcamos la renderización como completa

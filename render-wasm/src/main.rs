@@ -88,13 +88,11 @@ pub unsafe extern "C" fn render_request_animation_frame(_timestamp: f64) {
     let state = unsafe { STATE.as_mut() }.expect("Got an invalid state pointer");
     if state.render_state.is_running {
         if let Some(frame_id) = state.render_state.render_frame_id {
-            cancel_animation_frame(frame_id);
+            // cancel_animation_frame(frame_id);
         }
-        state.render_state.init_render_time();
+        println!("render_request_animation_frame");
         state.render_all(true);
         state.render_state.render_frame_id = Some(start_animation_frame());
-    } else {
-        state.render_state.flush();
     }
 }
 

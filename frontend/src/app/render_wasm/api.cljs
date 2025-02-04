@@ -502,18 +502,14 @@
 (defn set-view-box
   [zoom vbox]
   (h/call internal-module "_set_view" zoom (- (:x vbox)) (- (:y vbox)))
-  #_(request-render "set-view-box")
   (h/call internal-module "_render_all_from_cache")
-  (debounce-render)
-  #_(h/call internal-module "_pan"))
+  (debounce-render))
 
 (defn set-view-zoom
   [zoom vbox]
   (h/call internal-module "_set_view" zoom (- (:x vbox)) (- (:y vbox)))
-  #_(h/call internal-module "_zoom")
   (h/call internal-module "_render_all_from_cache")
-  (debounce-render)
-  #_(request-render "set-view-zoom"))
+  (debounce-render))
 
 (defn set-objects
   [objects]

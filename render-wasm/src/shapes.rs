@@ -56,10 +56,6 @@ pub struct Shape {
     pub svg: Option<skia::svg::Dom>,
     pub svg_attrs: HashMap<String, String>,
     shadows: Vec<Shadow>,
-    pub next: Option<Uuid>,
-    pub relationship: String,
-    pub degree: u32,
-    pub depth: u32,
 }
 
 impl Shape {
@@ -81,10 +77,6 @@ impl Shape {
             svg: None,
             svg_attrs: HashMap::new(),
             shadows: vec![],
-            next: None,
-            relationship: "down".to_string(),
-            degree: 0,
-            depth: 0,
         }
     }
 
