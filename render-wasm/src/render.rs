@@ -281,7 +281,7 @@ impl RenderState {
 
         debug::render_wasm_label(self);
 
-        self.flush();
+        // self.flush();
     }
 
     pub fn render_all_from_cache(&mut self) -> Result<(), String> {
@@ -338,7 +338,7 @@ impl RenderState {
         }
 
         let mut duration = 0;
-        // println!("---->render_shape_tree stack {:?}", self.stack);
+        println!("---->render_shape_tree stack {:?}", self.stack);
         while let Some((node_id, visited_children)) = self.stack.pop() {
             // println!("Duration {:?}", duration);
             // println!("---->stack {:?}", self.stack);
@@ -347,14 +347,14 @@ impl RenderState {
                 if !visited_children {
                     // let mut is_complete = self.viewbox.area.contains(element.bounds());
 
-                    // if !node_id.is_nil() {
-                    //     if !element.bounds().intersects(self.viewbox.area) || element.hidden() {
-                    //         debug::render_debug_element(self, element, false);
-                    //         continue;
-                    //     } else {
-                    //         debug::render_debug_element(self, element, true);
-                    //     }
-                    // }
+                    if !node_id.is_nil() {
+                        if !element.bounds().intersects(self.viewbox.area) || element.hidden() {
+                            debug::render_debug_element(self, element, false);
+                            continue;
+                        } else {
+                            debug::render_debug_element(self, element, true);
+                        }
+                    }
 
                     let mut paint = skia::Paint::default();
                     paint.set_blend_mode(element.blend_mode().into());
@@ -401,7 +401,7 @@ impl RenderState {
                 eprintln!("Error: Element with root_id {node_id} not found in the tree.");
                 // return false;
             }
-            duration = get_time() - self.render_time;
+            // duration = get_time() - self.render_time;
             if duration > 16 {
                 return false;
             }
